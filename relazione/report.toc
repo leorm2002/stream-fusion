@@ -1,0 +1,14 @@
+\babel@toc {italian}{}\relax 
+\babel@toc {italian}{}\relax 
+\contentsline {section}{\numberline {1}Requirement specification}{4}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Requisiti di business}{4}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Modello di dominio}{4}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Requisiti funzionali uente}{4}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Requisiti funzionali di sistema}{4}{subsection.1.4}%
+\contentsline {subsection}{\numberline {1.5}Requisiti non funzionali}{4}{subsection.1.5}%
+\contentsline {subsection}{\numberline {1.6}Requisiti di implementazione}{4}{subsection.1.6}%
+\contentsline {section}{\numberline {2}Design architetturale}{4}{section.2}%
+\contentsline {section}{\numberline {3}Design di dettaglio}{4}{section.3}%
+\contentsline {section}{\numberline {4}Implmentazione}{4}{section.4}%
+\contentsline {section}{\numberline {5}Testing}{4}{section.5}%
+\contentsline {section}{\numberline {6}Retrospettiva}{4}{section.6}%

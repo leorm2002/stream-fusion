@@ -1,0 +1,135 @@
+%root = ../
+\documentclass[a4paper,11pt]{article}
+\usepackage{float}
+\usepackage[italian]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{automata,positioning,arrows.meta,calc}
+
+\geometry{margin=2.5cm}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue
+}
+
+\title{PPS - Scala Stream Fusion}
+\author{Leonardo Naddei}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\newpage
+
+\tableofcontents
+
+\newpage
+\section*{Abstract}
+
+Il presente lavoro descrive la realizzazione di una libreria per Scala 3 che consenta di definire pipeline di elaborazione secondo un paradigma dichiarativo, ottenendo al contempo prestazioni comparabili a quelle di codice imperativo specializzato manualmente.
+
+Basandosi sul concetto di stream fusion, introdotto in Stream Fusion: From Lists to Streams to Nothing at All, e sfruttando le funzionalità di metaprogrammazione offerte dalle macro di Scala 3, è stata sviluppata una libreria capace di trasformare pipeline dichiarative in codice specializzato ed efficiente generato a compile-time. La libreria offre inoltre un'architettura estendibile per la definizione di nuovi operatori terminali, permettendo di integrare nuovi comportamenti nella fase di fusione senza rinunciare alle ottimizzazioni statiche.
+
+Tale generazione statica permette di eliminare i principali overhead tipici delle astrazioni funzionali su JVM. L'analisi del bytecode prodotto conferma la completa fusione delle operazioni sequenziali in un unico ciclo imperativo e l'inlining diretto delle lambda nel callsite. Ciò azzera l'uso di istruzioni \texttt{invokedynamic}, elimina il dispatch indiretto (evitando call site polimorfici o megamorfici) e rimuove le allocazioni di collezioni intermedie, iteratori e closure, azzerando al contempo il boxing dei tipi primitivi.
+
+Per certi aspetti, il modello ottenuto richiama il paradigma di genericità dei template C++: il codice viene specializzato in fase di compilazione rispetto ai tipi e alla specifica composizione delle operazioni, quando tali informazioni sono disponibili staticamente. Le macro di Scala aggiungono tuttavia una componente esplicita di metaprogrammazione, permettendo non soltanto di istanziare codice generico, ma anche di analizzare, trasformare e ottimizzare la struttura della pipeline prima della sua emissione.
+
+I benchmark condotti tramite JMH mostrano uno speedup significativo e un consumo di memoria drasticamente ridotto rispetto alle librerie standard. Il risultato è un framework che preserva l'espressività, la composizionalità e la type safety tipiche della programmazione funzionale.
+
+\newpage
+
+\section{Requirement specification}
+
+\subsection{Requisiti di business}
+
+\subsection{Modello di dominio}
+
+\subsection{Requisiti funzionali uente}
+
+\subsection{Requisiti funzionali di sistema}
+
+\subsection{Requisiti non funzionali}
+
+\subsection{Requisiti di implementazione}
+
+\section{Design architetturale}
+
+L'applicativo è composto da due aree: l'API utilizzabile e un compilatore che si occupa del parsing, ottimizzazione e creazione di codice ad hoc a partire del codice delle macro
+
+
+
+\section{Design di dettaglio}
+
+design dell'API
+
+alberi di parsing
+
+estensione per enrichement
+
+
+\section{Implmentazione}
+algoritmo implementato (push stream)
+
+ottimizzazioni applicate ai parametri
+
+enrichement:
+  bubbling delle dichiarazioni
+
+generazione di codice
+
+implementazione del filter
+
+implementazione del flatmapping
+
+es semplice:
+
+IncIter(from: Int): infinite lazy iterator, each next returs the next
+
+FusedStream
+.from(List(1,2,3,4,5))
+.skip(3)
+.flatMap(n -> Stream.of(IncIter(n*10)).limit(3))
+.limit(10)
+.toList()
+
+// Must be converted to 
+
+i = 0
+j = 0
+
+for i in l:
+  if(i++ >= 3){
+    { <<< must inject condition on j too
+      k = 0
+      iter = IncIter( i* 10)
+      for ii in iter{
+        if(k++ >= 3){
+          break
+        }
+        --------- This get injectd into the flatMap ---------
+        if(j ++ >= 10){
+          break all
+        }
+          push(ii)
+        ---------
+      }
+    }
+
+      
+  }
+
+esampio estensione con collector utilizzando i trait
+
+\section{Testing}
+
+\section{Retrospettiva}
+\end{document}

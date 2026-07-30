@@ -30,3 +30,15 @@ metals.sbt
 .idea
 .idea_modules
 /.worksheet/
+
+
+# latex
+
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+doc/*.pdf
+doc/pdfpages
