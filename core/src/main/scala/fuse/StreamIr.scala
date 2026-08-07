@@ -5,6 +5,9 @@ import scala.quoted.Expr
 import scala.quoted.Type
 import scala.collection.mutable.ArrayBuilder
 
+// Alias the StreamIr to a type combined with singleton. this will guarantee no problem with path deendant type
+type AnyIR = StreamIr & Singleton
+
 class StreamIr(using val quotes: Quotes) {
   import quotes.reflect.*
 
@@ -116,6 +119,8 @@ class StreamIr(using val quotes: Quotes) {
     */
   case class EnrichedCollectionStrategy[A, Buf, R](collectionStrategy: CollectionStrategy[A, Buf, R], earlyExitVar: Option[Expr[Boolean]], ref: List[Expr[Boolean]])
 
+  /** Represents a flatMap enriched with the list of predicates injected from the outer stream and extracted from the inner one
+    */
   class EnrichedFlatMap[A, B](
       upstream: StreamTree[A],
       innerTree: StreamTree[B], // AST dell'inner stream già arricchito
@@ -126,4 +131,30 @@ class StreamIr(using val quotes: Quotes) {
       val predicates: List[Expr[Boolean]]
   ) extends FlatMap[A, B](upstream, innerTree, inType, outType, elemSymbol, innerDeclarations)
 
+  def createDef[T](symbol: Symbol, value: Int) = {
+    ValDef(symbol, Some(Literal(IntConstant(value))))
+  }
+  def createDef[T](symbol: Symbol, value: Boolean) = {
+    ValDef(symbol, Some(Literal(BooleanConstant(value))))
+  }
+
+   def createConstant[T: Type](name: String) = {
+    Symbol.newVal(
+      parent = Symbol.spliceOwner,
+      name = Symbol.freshName(name),
+      tpe = TypeRepr.of[T],
+      flags = Flags.EmptyFlags,
+      privateWithin = Symbol.noSymbol
+    )
+  }
+
+  def createVariable[T: Type](name: String) = {
+    Symbol.newVal(
+      parent = Symbol.spliceOwner,
+      name = Symbol.freshName(name),
+      tpe = TypeRepr.of[T],
+      flags = Flags.Mutable, // Mutable 'var'
+      privateWithin = Symbol.noSymbol
+    )
+  }
 }

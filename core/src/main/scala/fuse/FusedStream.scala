@@ -84,7 +84,7 @@ object FusedStream {
     // logParsing(parsed)
 
     // Performa optimization, creates the variable and links the usage
-    val optimized = Optimizer(ir).optimizeP(parsed)
+    val optimized = Optimizer(ir).optimize(parsed)
     // logOptimized(optimized)
 
     // Given the sequence of operation generate the code

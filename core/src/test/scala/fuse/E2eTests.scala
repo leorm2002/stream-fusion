@@ -406,17 +406,16 @@ class E2eTests extends FunSuite {
       .map(E2eTests.myMapper)
       .map(E2eTests.myMapper2)
       .collect(Collector.toList)
-
     val expectedFirst4 = List(
-      ("a", "a"),
-      ("a", "aa"),
-      ("a", "aaa"),
-      ("a", "aaaa")
+      ("a", "(a,a)"),
+      ("a", "(a,a)(a,a)"),
+      ("a", "(a,aa)"),
+      ("a", "(a,aa)(a,aa)")
     )
 
     assertEquals(result.size, 20)
     assertEquals(result.take(4), expectedFirst4)
-    assertEquals(result.last, ("e", "eeee"))
+    assertEquals(result.last, ("c", "(c,cc)(c,cc)"))
   }
 
 }

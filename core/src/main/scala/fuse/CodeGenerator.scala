@@ -3,7 +3,7 @@ package fuse
 import scala.quoted.*
 import fuse.FusedStream.*
 import scala.collection.mutable.ArrayBuilder
-final class CodeGenerator[IR <: StreamIr & Singleton](val ir: IR) {
+final class CodeGenerator[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
 
   import ir.*

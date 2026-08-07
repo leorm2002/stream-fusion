@@ -1,28 +1,31 @@
 package fuse
 import scala.quoted.*
+import scala.compiletime.ops.int
 
-object Optimizer {}
-
-final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
+final class Optimizer[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
 
   import ir.*
   import ir.quotes.reflect.*
-  import Optimizer.*
 
-  def optimizeP[A, Buf, R](arg0: ir.Ast[A, Buf, R]): AstExt[A, Buf, R] = {
-    val (earlyExitRef, earlyExitDeclarations) = enrich(arg0.collectionStrategy)
-    val optimizedStram = optimize(arg0.parsedStream)
+  def optimize[A, Buf, R](ast: ir.Ast[A, Buf, R]): AstExt[A, Buf, R] = {
 
-    val (enrichedStream, declarations, earlyExitRefs) = enrich[A](optimizedStram, earlyExitRef.toList)
+    // Stream optimization
+    val optimizedStream = optimize(ast.parsedStream)
 
-    AstExt(enrichedStream, declarations ::: earlyExitDeclarations, EnrichedCollectionStrategy(arg0.collectionStrategy, earlyExitRef, earlyExitRefs))
+    // Stream enrichment
+    val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
+    val (enrichedStream, declarations, earlyExitRefs) = enrich[A](optimizedStream, earlyRef.toList)
+
+    AstExt(enrichedStream, declarations ::: exitDeclarations, EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs))
   }
 
   private def enrich[A, Buf, R](strategy: CollectionStrategy[A, Buf, R]): (Option[Expr[Boolean]], List[Statement]) = {
 
     strategy match {
-      case ToArray()                => (None, Nil)
+      // If is a toArray strategy no enrichment is needed it will be handled completely in the code generation phase with native types specializtion
+      case ToArray() => (None, Nil)
+      // Here we have to emit the variable for exiting the stream: the declaration and the  expsression that links it
       case WithCollector(collector) => {
         val collectorTpe: TypeRepr = collector.asTerm.tpe
         val earlyStoppingType = TypeRepr.of[fuse.EarlyStopping]
@@ -31,15 +34,8 @@ final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
         if (isEarlyStopping) {
 
           // Create a dedicated variable for exit
-          val counterSymbol = Symbol.newVal(
-            parent = Symbol.spliceOwner,
-            name = Symbol.freshName("keepProducing"), // Scala will automatically generate an unique label
-            tpe = TypeRepr.of[Boolean],
-            flags = Flags.Mutable, // Mutable 'var'
-            privateWithin = Symbol.noSymbol
-          )
-
-          val valDef = ValDef(counterSymbol, Some(Literal(BooleanConstant(true))))
+          val counterSymbol = createVariable[Boolean]("keepProducing")
+          val valDef = createDef(counterSymbol, true)
           val counterRef = Ref(counterSymbol).asExprOf[Boolean]
           return (Option(counterRef), List(valDef))
         } else {
@@ -56,10 +52,11 @@ final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
     parsedStream match {
       // TODO: here match on the node: if it's a node which opens a new scope or a nested stream? (ex flatMap) stop the bubbling
 
+      // Both limit and skip have no possible optimizations
       case Limit(upstream, count, outType) => Limit(optimize(upstream), count, outType)
       case Skip(upstream, count, outType)  => Skip(optimize(upstream), count, outType)
 
-      // The map fuse first
+      // Map fuse, concatenate two sequential mapping
       case map2 @ Map(map1 @ Map(upstream, f, inTypeA, outTypeB), g, _, outTypeC) => {
         // m2.function è Expr[b => c]
         (map1, map2) match {
@@ -75,14 +72,16 @@ final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
             }
 
             val fusedMap = Map[a, c](upstream.asInstanceOf[StreamTree[a]], fusedFunction, m1.inType, m2.outType)
+            // Recursively call the optimize on the new obtained map
             optimize(fusedMap)
           }
         }
       }
-      // Then the simple map
+      // A map alone no optimizations
       case Map(upstream, function, b, c) => {
         Map(optimize(upstream), function, b, c)
       }
+      // Filter fuse, concatenate two sequential filtering
       case f2 @ Filter(f1 @ Filter(upstream, p1, inType1), p2, inType2) => {
         // Beta reducing the filter operations
         (f1, f2) match {
@@ -92,6 +91,7 @@ final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
             // La nuova lambda fusa prende (x: a) e usa il corto circuito logico (&&)
             val fusedPredicate: Expr[a => Boolean] = '{ (x: a) => ${ Expr.betaReduce('{ ${ filter1.predicate }(x) }) } && ${ Expr.betaReduce('{ ${ filter2.predicate }(x) }) } }
             val fusedFilter = Filter[a](upstream.asInstanceOf[StreamTree[A]], fusedPredicate, f1.outType)
+            // Recursively call the optimize on the new obtained filter
             optimize(fusedFilter)
           }
         }
@@ -102,28 +102,21 @@ final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
 
       case FlatMap(upstream, innerTree, inType, outType, elemSymbol, innerDeclarations) =>
 
-        type A0 = Any
-        type B = A
-        given Type[A0] = inType.asInstanceOf[Type[A0]]
-        given Type[B] = outType.asInstanceOf[Type[B]]
+        type IN = Any
+        type OUT = A
+        given Type[IN] = inType.asInstanceOf[Type[IN]]
+        given Type[OUT] = outType.asInstanceOf[Type[OUT]]
 
-        val owner = Symbol.spliceOwner
-        val elemSym = Symbol.newVal(
-          owner,
-          "outerElem",
-          TypeRepr.of[A0],
-          Flags.EmptyFlags,
-          Symbol.noSymbol
-        )
+        val elemSym = createConstant[IN]("outerElem")
 
-        // Parse and optimize the inner stream
-        val innerParsedTree = innerTree // todo extract
-        val optimizedInnerTree = optimize(innerParsedTree.asInstanceOf[StreamTree[A]])
+        // Optimize the inner stream itself
+        val optimizedInnerTree = optimize(innerTree)
 
         // Ricostruiamo la lambda ottimizzata o preserviamo il nodo con l'inner stream già parsato/ottimizzato
         val optimizedUpstream = optimize(upstream)
 
         FlatMap(optimizedUpstream, optimizedInnerTree, inType, outType, elemSymbol, innerDeclarations)
+
       case source @ ArraySource(_, _)    => source // It's the root nodw
       case source @ IterableSource(_, _) => source // It's the root nodw
 
@@ -146,15 +139,8 @@ final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
         // Enrich the upstream first
 
         // Now create the counter state
-        val counterSymbol = Symbol.newVal(
-          parent = Symbol.spliceOwner,
-          name = Symbol.freshName("limitCounter"), // Scala will automatically generate an unique label
-          tpe = TypeRepr.of[Int],
-          flags = Flags.Mutable, // Mutable 'var'
-          privateWithin = Symbol.noSymbol
-        )
-
-        val valDef = ValDef(counterSymbol, Some(Literal(IntConstant(0))))
+        val counterSymbol = createVariable[Int]("limitCounter")
+        val valDef = createDef(counterSymbol, 0)
         val counterRef = Ref(counterSymbol).asExprOf[Int]
 
         // Build the predicate associated with the symbol
@@ -174,34 +160,19 @@ final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
       }
 
       case Skip(upstream, count, outType) => {
-
-        // Now create the counter state
-        val counterSymbol = Symbol.newVal(
-          parent = Symbol.spliceOwner,
-          name = Symbol.freshName("skipCounter"), // Scala will automatically generate an unique label
-          tpe = TypeRepr.of[Int],
-          flags = Flags.Mutable, // Mutable 'var'
-          privateWithin = Symbol.noSymbol
-        )
-
-        val valDef = ValDef(counterSymbol, Some(Literal(IntConstant(0))))
+        val counterSymbol = createVariable[Int]("skipCounter")
+        val valDef = createDef(counterSymbol, 0)
         val counterRef = Ref(counterSymbol).asExprOf[Int]
 
         // Enrich the upstream first
         val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(upstream, exitPredicates)
-        // Step C: Construct enriched node holding the reference
-        val enrichedSkip = EnrichedSkip(
-          upstream = enrichedUpstream,
-          count = count,
-          outType = outType,
-          counterRef = counterRef
-        )
+        // Construct enriched node holding the reference
+        val enrichedSkip = EnrichedSkip(enrichedUpstream, count, outType, counterRef)
 
         // Bubble up the variable declarations plus the hoters
         (enrichedSkip, upstreamDeclarations :+ valDef, outPred)
       }
 
-      // This must be last
       case Map(upstream, a, b, c) => {
         val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(upstream, exitPredicates)
         val enrichedMap = Map(enrichedUpstream, a, b, c)
@@ -247,4 +218,5 @@ final class Optimizer[IR <: StreamIr & Singleton](val ir: IR) {
     }
 
   }
+
 }
