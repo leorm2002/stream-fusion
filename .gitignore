@@ -42,3 +42,4 @@ metals.sbt
 *.synctex.gz
 doc/*.pdf
 doc/pdfpages
+*.toc

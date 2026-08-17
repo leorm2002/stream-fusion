@@ -71,6 +71,7 @@ object FusedStream {
       collectImpl[A, Buf, R]('self, 'collector)
     }
   }
+  
 
   // --- Macro implementation ---
   def collectImpl[A: Type, Buf: Type, R: Type](stream: Expr[Stream[A]], terminal: Expr[Collector[A, Buf, R]])(using q: Quotes): Expr[R] = {

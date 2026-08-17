@@ -1,5 +1,5 @@
 %root = ../
-\documentclass[a4paper,11pt]{article}
+\documentclass[a4paper,11pt]{report}
 \usepackage{float}
 \usepackage[italian]{babel}
 \usepackage[T1]{fontenc}
@@ -11,6 +11,13 @@
 \usepackage{xcolor}
 \usepackage{listings}
 \usepackage{tikz}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{booktabs}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definizione}[section]
+
 \usetikzlibrary{automata,positioning,arrows.meta,calc}
 
 \geometry{margin=2.5cm}
@@ -18,6 +25,10 @@
   colorlinks=true,
   linkcolor=blue,
   urlcolor=blue
+}
+\lstset{
+  showspaces=false,       % Rimuove il simbolo di spazio visibile dal codice
+  showstringspaces=false  % Rimuove il simbolo di spazio visibile anche dalle stringhe "..."
 }
 
 \title{PPS - Scala Stream Fusion}
@@ -45,7 +56,202 @@ Per certi aspetti, il modello ottenuto richiama il paradigma di genericità dei 
 
 I benchmark condotti tramite JMH mostrano uno speedup significativo e un consumo di memoria drasticamente ridotto rispetto alle librerie standard. Il risultato è un framework che preserva l'espressività, la composizionalità e la type safety tipiche della programmazione funzionale.
 
-\newpage
+  \newpage
+\chapter{Metaprogrammazione e generazione statica del codice in Scala 3}
+\label{chap:metaprogramming}
+
+Il sistema di metaprogrammazione di Scala 3 segue un approccio di \emph{multi-stage programming}: una parte del programma viene eseguita durante uno stage precedente e produce codice destinato a uno stage successivo. Questo modello permette di costruire macro che generano codice ben tipato e safe per costruzione \cite{stucki2021multistage,stucki2023scalable}.
+
+Nel progetto sviluppato, la metaprogrammazione viene utilizzata in entrambe le sue forme principali: analitica, per ispezionare e destrutturare la pipeline scritta dall'utente, e \emph{generativa}, per produrre il codice che ne realizza l'esecuzione.
+
+\section{Multi-stage programming in Scala 3}
+\label{sec:multistage}
+
+Le due primitive fondamentali del sistema di metaprogrammazione staged di Scala 3 sono le \emph{quote} e gli \emph{splice}.
+
+Una quote
+
+\begin{lstlisting}[language=Scala]
+'{ expression }
+\end{lstlisting}
+
+costruisce una rappresentazione tipizzata del codice contenuto al suo interno. Se \texttt{expression} produce un valore di tipo \texttt{T}, il risultato della quote ha tipo
+
+\begin{lstlisting}[language=Scala]
+Expr[T]
+\end{lstlisting}
+
+e rappresenta codice che produrrà un valore di tipo \texttt{T} nello stage successivo.
+
+
+Uno splice:
+
+\begin{lstlisting}[language=Scala]
+  ${ expression }
+\end{lstlisting}
+
+opera invece nella direzione opposta e inserisce all'interno del codice quotato il frammento di programma rappresentato da un'espressione \texttt{Expr[T]}.
+
+Il classico esempio di generazione staged è l'elevamento a potenza con esponente noto durante la compilazione:
+
+\begin{lstlisting}[language=Scala]
+def powCode(x: Expr[Int], n: Int)(using Quotes): Expr[Int] =
+  if n == 0 then
+    Expr(1)
+  else
+    '{ $x * ${ powCode(x, n - 1) } }
+\end{lstlisting}
+
+La ricorsione di \texttt{powCode} viene eseguita durante l'espansione della macro. Per un esponente pari a tre, il frammento generato è concettualmente equivalente a
+
+\begin{lstlisting}[language=Scala]
+x * x * x * 1
+\end{lstlisting}
+
+e non contiene quindi né il ciclo né la ricorsione impiegata dal metaprogramma per costruirlo.
+
+
+\section{Metaprogrammazione generativa e analitica}
+\label{sec:generative-analytical}
+
+Una macro puramente generativa costruisce un nuovo frammento di programma a partire da informazioni note durante la compilazione. Nel progetto è tuttavia necessario anche compiere l'operazione inversa: ricevere un frammento di programma, riconoscerne la struttura e decomporlo nei suoi componenti.
+
+Scala 3 supporta questa forma di metaprogrammazione attraverso il pattern matching sul codice quotato. Ad esempio, una generica espressione può essere analizzata con un pattern della forma
+
+\begin{lstlisting}[language=Scala]
+expr match {
+  case '{ someFunction($argument) } =>
+    ...
+}
+\end{lstlisting}
+
+Per i casi più semplici sarebbe possibile eseguire questa analisi utilizzando esclusivamente quoted pattern. Nel progetto, tuttavia, è necessario accedere a dettagli più fini dell'albero generato dal compilatore, rendendo necessario il passaggio alla Reflection API.
+
+\section{Dalle espressioni all'AST tipizzato}
+\label{sec:reflection}
+
+Il tipo \texttt{Expr[T]} offre un'interfaccia ad alto livello sul codice. Tale rappresentazione nasconde parte della struttura interna dell'espressione. Quando è necessario analizzare direttamente il programma è possibile convertire una \texttt{Expr[T]} nel relativo nodo dell'AST prodotto dal compilatore:
+
+\begin{lstlisting}[language=Scala]
+expr.asTerm
+\end{lstlisting}
+
+La Reflection API espone quindi la struttura tipizzata prodotta dal compilatore. Tra i nodi più importanti utilizzati nel parser vi sono:
+
+\begin{itemize}
+    \item \texttt{Apply}, per l'applicazione di una funzione;
+    \item \texttt{TypeApply}, per un'applicazione contenente parametri di tipo;
+    \item \texttt{Select}, per la selezione di un membro;
+    \item \texttt{Ident}, per il riferimento a un identificatore;
+    \item \texttt{Block}, per un blocco contenente dichiarazioni e un'espressione finale;
+    \item \texttt{Inlined}, per rappresentare il risultato di un'espansione inline;
+    \item \texttt{ValDef}, \texttt{Assign} e \texttt{Ref}, utilizzati durante la generazione di nuovo codice.
+\end{itemize}
+
+Questo livello di rappresentazione è sostanzialmente più espressivo rispetto alle sole quote.
+
+\section{Tipi staged e tipi riflessivi}
+\label{sec:types}
+
+Scala 3 mette a disposizione due rappresentazioni complementari:
+
+\begin{description}
+    \item[\texttt{Type[T]}] rappresenta il tipo \texttt{T} nell'API staged ed è utilizzabile insieme a \texttt{Expr[T]}, quote e splice;
+    \item[\texttt{TypeRepr}] rappresenta invece un tipo all'interno della Reflection API e permette di ispezionarne direttamente la struttura.
+\end{description}
+
+
+Data una \texttt{TypeRepr}, il metodo \texttt{.asType} restituisce un valore \texttt{Type[?]} sul quale è possibile eseguire pattern matching:
+
+\begin{lstlisting}[language=Scala]
+item.asType match {
+  case '[elem] => ...
+}
+\end{lstlisting}
+
+Un esempio è l'estrazione del tipo per la creazione di un iteratore da un singolo elemento:
+
+\begin{lstlisting}[language=Scala]
+private def createSourceOf(item: Term): ParsedTree = {
+  item.asType match {
+    case '[elem] =>
+      val singleExpr = item.asExprOf[elem]
+      val iterableExpr: Expr[Iterable[elem]] =
+        '{ Iterable.single[elem](${ singleExpr }) }
+      ...
+  }
+}
+\end{lstlisting}
+
+Questo esempio contiene in pochi passaggi l'intero collegamento tra reflection e staged programming:
+
+\begin{enumerate}
+    \item viene determinato il tipo del termine dell'AST ricevuto;
+    \item il tipo viene estratto in \texttt{elem} mediante il pattern \texttt{'[elem]};
+    \item il \texttt{Term} originale viene convertito in \texttt{Expr[elem]};
+    \item viene generato un nuovo frammento \texttt{Expr[Iterable[elem]]};
+\end{enumerate}
+
+
+\section{Beta reduction delle funzioni}
+\label{sec:beta-reduction}
+
+Un altro elemento importante è l'utilizzo della $\beta$-reduction, considerando una funzione:
+\begin{equation}
+f = x \mapsto e,
+\end{equation}
+
+l'applicazione
+
+\begin{equation}
+f(a)
+\end{equation}
+
+può essere riscritta sostituendo direttamente $x$ con $a$ all'interno di $e$.
+
+Scala 3 rende disponibile questa trasformazione attraverso: \texttt{Expr.betaReduce(...)}, viene utilizzata per l'applicazione esplicita delle lambda eliminando invocazioni tramite \texttt{invokedynamic}. Prendendo ad esempio l'operazione \texttt{filter}:
+
+\begin{lstlisting}[language=Scala]
+val cond = Expr.betaReduce('{ ${ filter.predicate }($elem) })
+\end{lstlisting}
+
+
+Se la funzione ricevuta è una lambda direttamente disponibile alla macro, il suo corpo può quindi essere incorporato nel codice generato.
+
+Una pipeline come
+
+\begin{lstlisting}[language=Scala]
+stream
+  .filter(x => x > 0)
+  .map(x => x * 2)
+\end{lstlisting}
+
+può pertanto contribuire a generare un corpo concettualmente equivalente a
+
+\begin{lstlisting}[language=Scala]
+if (elem > 0) {
+  emit(elem * 2)
+}
+\end{lstlisting}
+
+Invece che:
+
+\begin{lstlisting}[language=Scala]
+if (filter.test(elem)) {
+  emit(map.apply(elem))
+}
+\end{lstlisting}
+
+Nell'ultimo caso, filter e map denotano istanze materializzate dalla JVM tramite call site invokedynamic, la loro applicazione avviene attraverso una chiamata indiretta all'interfaccia funzionale, ad esempio Function1.apply. Questo introduce un call site il cui target deve essere risolto e, qualora diventi polimorfico o megamorfico, può ridurre l'efficacia di devirtualizzazione, inlining e ulteriori ottimizzazioni interprocedurali del JIT. Incorporando staticamente il corpo della lambda nell'IR generato, la macro elimina sia la rappresentazione della funzione come entità invocabile sia il relativo dispatch.
+
+\section{Simboli, variabili generate e hygiene}
+\label{sec:symbols}
+
+Nell'AST di Scala, un riferimento a una variabile è associato semanticamente al relativo \texttt{Symbol}. Il nome è solamente una delle proprietà del simbolo e non ne rappresenta l'identità. La Reflection API permette di creare nuove variabili attraverso: \texttt{Symbol.newVal(...)}, e di fare successivamente riferimento allo stesso simbolo attraverso \texttt{Ref(symbol)}. La definizione viene creata nell'AST tramite \texttt{ValDef(symbol, Some(initializer))}
+
+La distinzione tra nome e simbolo garantisce inoltre l'\emph{hygiene} della macro: variabili generate dalla macro non possono andare in conflitto con variabili omonime definite nel codice utente.
+
+TODO: esempio creazione e uso
 
 \section{Requirement specification}
 
@@ -75,6 +281,109 @@ alberi di parsing
 
 estensione per enrichement
 
+
+\subsection{Operazioni Supportate}
+Dato un generico stream $\mathcal{S}(A)$ ovvero una sequenza (potenzialmente infinita) di elementi omogenei presi dal dominio del tipo $A$, ovvero $\mathcal{S}(A) \in A^* \cup A^\infty$. 
+
+Di seguito vengono formalizzate, in termini di firma funzionale, semantica algebrica e cardinalità di emissione, le operazioni di trasformazione intermedie supportate.
+
+
+\subsubsection{Map (Trasformazione Funzionale Element-wise)}
+\label{sub:map}
+L'operatore \textsf{map} rappresenta l'applicazione di una funzione di trasformazione deterministica priva di side effects su ogni singolo elemento del flusso.
+
+\begin{definition}[Map]
+Sia $f: A \to B$ una funzione pura. L'operatore $\textsf{map}_f: \mathcal{S}(A) \to \mathcal{S}(B)$ trasforma la sequenza $\langle a_1, a_2, \dots \rangle$ nella sequenza $\langle f(a_1), f(a_2), \dots \rangle$.
+\end{definition}
+
+\begin{itemize}
+    \item \textbf{Firma e Tipo}: $\textsf{map}: (A \to B) \to (\mathcal{S}(A) \to \mathcal{S}(B))$
+    \item \textbf{Mappatura di Cardinalità}: $1 : 1$. Per ogni elemento in ingresso $a_i \in A$, l'operatore produce esattamente un elemento in uscita $b_i = f(a_i) \in B$.
+    \item \textbf{Proprietà Algebriche}: Operazione \emph{stateless} (priva di stato), locale e conservativa rispetto alla lunghezza del flusso ($|\mathcal{S}(B)| = |\mathcal{S}(A)|$).
+\end{itemize}
+
+\subsubsection{Filter (Proiezione Predicativa)}
+\label{sub:filter}
+L'operatore \textsf{filter} seleziona un sottoinsieme degli elementi del flusso originale sulla base del soddisfacimento di una condizione booleana.
+
+\begin{definition}[Filter]
+Sia $p: A \to \mathbb{B}$ un predicato, dove $\mathbb{B} = \{\textsf{true}, \textsf{false}\}$. L'operatore $\textsf{filter}_p: \mathcal{S}(A) \to \mathcal{S}(A)$ preserva l'ordine degli elementi ed include l'elemento $a_i$ nel flusso di uscita se e solo se $p(a_i) = \textsf{true}$.
+\end{definition}
+
+\begin{itemize}
+    \item \textbf{Firma e Tipo}: $\textsf{filter}: (A \to \mathbb{B}) \to (\mathcal{S}(A) \to \mathcal{S}(A))$
+    \item \textbf{Mappatura di Cardinalità}: $1 : \{0, 1\}$. Ogni elemento $a_i$ genera $1$ elemento se $p(a_i) = \textsf{true}$, e $0$ elementi (scarto) se $p(a_i) = \textsf{false}$.
+    \item \textbf{Proprietà Algebriche}: Operazione \emph{stateless}, locale, con conservazione dell'ordine relativo ($|\mathcal{S}(A)_{\text{out}}| \le |\mathcal{S}(A)_{\text{in}}|$).
+\end{itemize}
+
+\subsubsection{Limit (Troncamento del Flusso)}
+\label{sub:limit}
+L'operatore \textsf{limit} definisce una delimitazione posizionale sulla dimensione massima del flusso processato.\footnote{Se il troncamento è guidato da un predicato $p: A \to \mathbb{B}$ anziché da una dimensione fissa $n$, l'operatore assume la semantica di \textsf{takeWhile}.}
+
+\begin{definition}[Limit]
+Sia $n \in \mathbb{N}_0$ un intero non negativo indicante la cardinalità massima del flusso desiderato. L'operatore $\textsf{limit}_n: \mathcal{S}(A) \to \mathcal{S}(A)$ estrae il prefisso di lunghezza al più $n$ del flusso $\mathcal{S}(A)$, interrompendo la propagazione degli elementi successivi.
+\end{definition}
+
+\begin{itemize}
+    \item \textbf{Firma e Tipo}: $\textsf{limit}: \mathbb{N}_0 \to (\mathcal{S}(A) \to \mathcal{S}(A))$
+    \item \textbf{Mappatura di Cardinalità}: $1 : \{0, 1\}$ (dipendente dall'indice posizionale $i$). Per l'indice $i \le n$ la cardinalità è $1 : 1$, mentre per $i > n$ la cardinalità trasla a $1 : 0$.
+    \item \textbf{Proprietà Algebriche}: Operazione \emph{stateful} (richiede il mantenimento di un contatore interno dei messaggi) e con valutazione a corto circuito (\emph{short-circuiting}).
+\end{itemize}
+
+\subsubsection{Skip (Scarto Posizionale Iniziale)}
+\label{sub:skip}
+L'operatore \textsf{skip} scarta i primi $n$ elementi dal flusso di input, lasciando passare inalterata la restante porzione della sequenza.\footnote{Nel caso in cui lo scarto sia basato su una condizione $p: A \to \mathbb{B}$, l'operatore assume la semantica di \textsf{dropWhile}.}
+
+\begin{definition}[Skip]
+Sia $n \in \mathbb{N}_0$ un offset intero. L'operatore $\textsf{skip}_n: \mathcal{S}(A) \to \mathcal{S}(A)$ sopprime i primi $n$ elementi del flusso $\mathcal{S}(A)$ e propaga integralmente la sequenza a partire dall'elemento $(n+1)$-esimo.
+\end{definition}
+
+\begin{itemize}
+    \item \textbf{Firma e Tipo}: $\textsf{skip}: \mathbb{N}_0 \to (\mathcal{S}(A) \to \mathcal{S}(A))$
+    \item \textbf{Mappatura di Cardinalità}: $1 : \{0, 1\}$ (dipendente dall'indice posizionale $i$). Per l'indice $i \le n$ la cardinalità è $1 : 0$, mentre per $i > n$ diventa $1 : 1$.
+    \item \textbf{Proprietà Algebriche}: Operazione \emph{stateful} basata su un contatore transitorio.
+\end{itemize}
+
+\subsection{FlatMap (Espansione Monadica e Appiattimento)}
+\label{sub:flatmap}
+L'operatore \textsf{flatMap} costituisce l'operatore di \emph{bind} monadico per la struttura dati stream, combinando una trasformazione $1 \to N$ con il successivo appiattimento (\emph{flattening}) delle sottosequenze generate.
+
+\begin{definition}[FlatMap]
+Sia $g: A \to \mathcal{S}(B)$ una funzione che associa ad ogni elemento di tipo $A$ un sotto-flusso di elementi di tipo $B$. L'operatore $\textsf{flatMap}_g: \mathcal{S}(A) \to \mathcal{S}(B)$ applica $g$ ad ogni elemento $a_i \in \mathcal{S}(A)$ e concatena sequenzialmente i flussi risultanti:
+\[
+\textsf{flatMap}_g(\langle a_1, a_2, \dots \rangle) = g(a_1) \mathbin{\Vert} g(a_2) \mathbin{\Vert} \dots
+\]
+dove $\mathbin{\Vert}$ rappresenta l'operatore di concatenazione ordinata tra flussi.
+\end{definition}
+
+\begin{itemize}
+    \item \textbf{Firma e Tipo}: $\textsf{flatMap}: (A \to \mathcal{S}(B)) \to (\mathcal{S}(A) \to \mathcal{S}(B))$
+    \item \textbf{Mappatura di Cardinalità}: $1 : N$, con $N \in \mathbb{N}_0 \cup \{\infty\}$. Ciascun elemento $a_i \in A$ genera un sotto-flusso $g(a_i)$ contenente da $0$ a $N$ elementi di tipo $B$.
+    \item \textbf{Proprietà Algebriche}: Corrisponde all'operatore \emph{Monadic Bind} ($\gg=$). Consente la variazione dinamica della struttura e della lunghezza complessiva del flusso.
+\end{itemize}
+
+\section*{Sintesi delle Operazioni e Proprietà Algebriche}
+
+In Tabella~\ref{tab:stream_ops} viene riportato un quadro riassuntivo delle firme formali e delle caratteristiche strutturali delle operazioni analizzate.
+
+\begin{table}[h!]
+\centering
+\caption{Confronto formale delle operazioni trasformative su flussi di dati.}
+\label{tab:stream_ops}
+\vspace{2mm}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Operazione} & \textbf{Firma di Dominio} & \textbf{Tipo di Trasformazione} & \textbf{Cardinalità ($1:M$)} & \textbf{Gestione Stato} \\
+\midrule
+\textsf{Map} & $A \to B$ & $\mathcal{S}(A) \to \mathcal{S}(B)$ & $1 : 1$ & Stateless \\
+\textsf{Filter} & $A \to \mathbb{B}$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateless \\
+\textsf{Limit} & $\mathbb{N}_0$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateful \\
+\textsf{Skip} & $\mathbb{N}_0$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateful \\
+\textsf{FlatMap} & $A \to \mathcal{S}(B)$ & $\mathcal{S}(A) \to \mathcal{S}(B)$ & $1 : N$ ($N \ge 0$) & Stateless / Contextual \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Implmentazione}
 algoritmo implementato (push stream)

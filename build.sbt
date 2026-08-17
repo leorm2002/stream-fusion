@@ -1,4 +1,5 @@
 val scala3Version = "3.8.4"
+val projectVesion = "0.1.0-SNAPSHOT"
 
 val commonSettings = Seq(
   scalaVersion := scala3Version,
@@ -28,16 +29,17 @@ lazy val core = project
   .settings(
     commonSettings,
     name := "stream-fusion-core",
-    version := "0.1.0-SNAPSHOT",
-    libraryDependencies += "org.scalameta" %% "munit" % "1.0.0" % Test
+    version := projectVesion,
+    libraryDependencies += "org.scalameta" %% "munit" % "1.0.0" % Test,
+    libraryDependencies += "org.scala-lang" %% "scala3-staging" % scalaVersion.value % Test
   )
 
 // 3. Application module that uses the macro
 lazy val runner = project
   .in(file("runner"))
-  .dependsOn(core) // <-- Crucial: ensures 'core' compiles FIRST
+  .dependsOn(core) // ensures 'core'
   .settings(
     commonSettings,
     name := "stream-fusion-runner",
-    version := "0.1.0-SNAPSHOT"
+    version := projectVesion
   )
