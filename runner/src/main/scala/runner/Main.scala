@@ -1,8 +1,7 @@
 package runner
 
-import fuse.FusedStream
-import fuse.FusedStream.*
-import fuse.Collector
+import fuse.{FusedStream, Collector}
+import FusedStream.*
 
 @main def hello(): Unit = {
   val i = 10

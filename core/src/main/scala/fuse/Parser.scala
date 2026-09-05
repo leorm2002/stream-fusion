@@ -1,7 +1,6 @@
 package fuse
 import scala.quoted.*
 import scala.collection.mutable.ArrayBuilder
-import fuse.streamInternal.Stream
 import scala.annotation.targetName
 
 final class Parser[IR <: AnyIR](val ir: IR) {
@@ -9,7 +8,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
   import ir.*
   import ir.quotes.reflect.*
 
-  def parseExpression[A: Type, Buf: Type, R: Type](stream: Expr[fuse.streamInternal.Stream[A]], collector: Expr[Collector[A, Buf, R]]): Ast[A, Buf, R] = {
+  def parseExpression[A: Type, Buf: Type, R: Type](stream: Expr[fuse.Stream[A]], collector: Expr[Collector[A, Buf, R]]): Ast[A, Buf, R] = {
     println("Starting  to parse the stream body")
     println("=== parseTerm ===")
     println(stream.asTerm.show)
@@ -67,13 +66,12 @@ final class Parser[IR <: AnyIR](val ir: IR) {
       }
 
       /** ==================== Map / FlatMap) ==================== */
-      case OperatorWithOutput(name, upstream, f, maybeTypeTree) => {
+      case OperatorWithOutput(name, upstream, f, outType) => {
         val parsedUpstream = parseTerm(upstream)
-        val typeTree = maybeTypeTree.getOrElse(TypeTree.of[Any])
 
         name match {
-          case "map"     => appendMap(parsedUpstream, f, typeTree)
-          case "flatMap" => appendFlatMap(parsedUpstream, f, typeTree)
+          case "map"     => appendMap(parsedUpstream, f, outType)
+          case "flatMap" => appendFlatMap(parsedUpstream, f, outType)
           case _         => report.errorAndAbort(s"StreamFusion: trasforma sconosciuta: $name")
         }
       }
@@ -283,32 +281,30 @@ final class Parser[IR <: AnyIR](val ir: IR) {
   // Riconosce la struttura del secondo TypeApply (es. per map/flatMap)
   // Estrae (upstream, f, Option[TypeTree]) gestendo sia la presenza che l'assenza del TypeTree di output
   object OperatorWithOutput {
-    // Estrattore per (Name, Upstream, Function, Option[TypeTree])
-    def unapply(term: Term): Option[(String, Term, Term, Option[TypeTree])] = term match {
-      // Forma curried con TypeTree esplicito: Apply(TypeApply(Apply(TypeApply(method, _), List(upstream)), List(outTypeTree)), List(f))
-      case Apply(TypeApply(Apply(TypeApply(NamedMethod(name), _), List(upstream)), List(outTypeTree: TypeTree)), List(f)) => Some((name, upstream, f, Some(outTypeTree)))
 
-      // Forma con TypeTree o Senza (Fallback generale per flatMap / map curried)
-      case Apply(Apply(TypeApply(NamedMethod(name), _), List(upstream)), List(f)) => Some((name, upstream, f, None))
+    def unapply(term: Term): Option[(String, Term, Term, TypeTree)] =
+      term match {
+        case Apply(
+              TypeApply(
+                Select(upstream, name @ ("map" | "flatMap")),
+                List(outType: TypeTree)
+              ),
+              List(f)
+            ) =>
+          Some((name, upstream, f, outType))
 
-      // Forma diretta: upstream.flatMap(f)
-      case Apply(Select(upstream, name), List(f)) => Some((name, upstream, f, None))
-
-      // Forma diretta con TypeApply: upstream.flatMap[T](f)
-      case Apply(TypeApply(Select(upstream, name), _), List(f)) => Some((name, upstream, f, None))
-
-      case _ => None
-    }
+        case _ =>
+          None
+      }
   }
-
   object UnaryOperator {
-    // Restituisce: Option[(NomeOperatore, UpstreamTerm, ArgomentoTerm)]
     def unapply(term: Term): Option[(String, Term, Term)] = term match {
-      // Gestisce la forma curried Apply(Apply(TypeApply(method, _), List(upstream)), List(arg))
-      case Apply(Apply(TypeApply(NamedMethod(name), _), List(upstream)), List(arg)) => Some((name, upstream, arg))
-      // Gestisce anche chiamate dirette non-TypeApply (es. upstream.filter(p)):
-      case Apply(Select(upstream, name), List(arg)) => Some((name, upstream, arg))
-      case _                                        => None
+      case Apply(
+            Select(upstream, name @ ("filter" | "skip" | "limit")),
+            List(arg)
+          ) =>
+        Some((name, upstream, arg))
+      case _ => None
     }
   }
 

@@ -5,75 +5,73 @@ import scala.collection.mutable.ListBuffer
 import scala.reflect.ClassTag
 import scala.collection.mutable.ArrayBuilder
 
-object streamInternal {
-  opaque type Stream[A] = Any
-}
+// Represents the possible operations on the stream
+sealed trait Stream[A] {
 
-import streamInternal.Stream
+  /** Filter the elements in the stream
+    */
+  def filter(pred: A => Boolean): Stream[A]
+
+  /** Performs a mapping of the element with the given function
+    */
+  def map[B](f: A => B): Stream[B]
+
+  /** The first n elements entering in this step will be discarded
+    */
+  def skip(n: Int): Stream[A]
+
+  /** Will limit the number of elements exiting from this step
+    */
+  def limit(n: Int): Stream[A]
+
+  /** By defining a FusedStream inside the flatMap function, you can perform a 1:N mapping (one-to-many).
+    *
+    * Note that the inner [[FusedStream]] must be defined inline directly within the `flatMap` body. This allows the stream transformer to fuse the inner operation into the outer
+    * execution pipeline without incurring extra allocation overhead.
+    *
+    * ===Example===
+    * {{{
+    * val result = FusedStream
+    *   .from(nums)
+    *   .flatMap(a => FusedStream.from(InfiniteRepeater(a)).map(x => (a, x)).limit(4))
+    *   .limit(20)
+    *   .collect(Collector.toList)
+    * }}}
+    */
+  def flatMap[B](f: A => Stream[B]): Stream[B]
+}
 
 object FusedStream {
 
+  private def compileTimeOnly: Nothing = throw new AssertionError("compile-time only")
+
   /** Initialize a stream, takes as input an iterable (could be limitless) source
     */
-  def from[A](source: Iterable[A]): Stream[A] = throw new Error("`from` should never be called at runtime!")
+  def from[A](source: Iterable[A]): Stream[A] = compileTimeOnly
 
   /** Creates a stream from an array, this kind of source may give better performance, especially compare to an iterable over boxed numeric types
     */
-  def from[A](source: Array[A]): Stream[A] = throw new Error("`from` should never be called at runtime!")
+  def from[A](source: Array[A]): Stream[A] = compileTimeOnly
 
   /** Creates a stream from a single element, will throw an exception if the source element is null
     * @param source
     *   the only element in the stream, must not be null
     */
-  def of[A](source: A): Stream[A] = throw new Error("`from` should never be called at runtime!")
-
-  // Chain methods
-  extension [A](self: Stream[A]) {
-
-    /** Filter the elements in the stream
-      */
-    def filter(pred: A => Boolean): Stream[A] = throw new Error("`filter` should never be called at runtime!")
-
-    /** Performs a mapping of the element with the given function
-      */
-    def map[B](f: A => B): Stream[B] = throw new Error("`map` should never be called at runtime!")
-
-    /** The first n elements entering in this step will be discarded
-      */
-    def skip(skip: Int): Stream[A] = throw new Error("`skip` should never be called at runtime!")
-
-    /** Will limit the number of elements exiting from this step
-      */
-    def limit(skip: Int): Stream[A] = throw new Error("`limit` should never be called at runtime!")
-
-    /** By defining a FusedStream inside the flatMap function, you can perform a 1:N mapping (one-to-many).
-      *
-      * Note that the inner [[FusedStream]] must be defined inline directly within the `flatMap` body. This allows the stream transformer to fuse the inner operation into the outer
-      * execution pipeline without incurring extra allocation overhead.
-      *
-      * ===Example===
-      * {{{
-      * val result = FusedStream
-      *   .from(nums)
-      *   .flatMap(a => FusedStream.from(InfiniteRepeater(a)).map(x => (a, x)).limit(4))
-      *   .limit(20)
-      *   .collect(Collector.toList)
-      * }}}
-      */
-    def flatMap[B](f: A => Stream[B]): Stream[B] = throw new Error("`flatMap` should never be called at runtime!")
-  }
+  def of[A](source: A): Stream[A] = compileTimeOnly
 
   extension [A](inline self: Stream[A]) {
 
     /** This is the terminal operator which will trigger the collection of the elements, a custom collector may be defined by the user
       */
     inline def collect[Buf, R](inline collector: Collector[A, Buf, R]): R = ${
-      collectImpl[A, Buf, R]('self, 'collector)
+      Macro.collectImpl[A, Buf, R]('self, 'collector)
     }
   }
-  
 
-  // --- Macro implementation ---
+}
+
+// --- Macro implementation ---
+object Macro {
   def collectImpl[A: Type, Buf: Type, R: Type](stream: Expr[Stream[A]], terminal: Expr[Collector[A, Buf, R]])(using q: Quotes): Expr[R] = {
 
     // The intermediate representation is istantiated in a class, to handle the Quotes istance being path dependand
@@ -95,6 +93,7 @@ object FusedStream {
     println(s"==============================")
     res
   }
+
   def logOptimized[A: Type, Buf: Type, R: Type](arg0: StreamIr#AstExt[A, Buf, R])(using Quotes) = {
     val ast = exptractAstRepresentation[A, Buf, R](arg0.enrichedStream)
     println("Optimized AST")
@@ -117,4 +116,5 @@ object FusedStream {
     }
 
   }
+
 }

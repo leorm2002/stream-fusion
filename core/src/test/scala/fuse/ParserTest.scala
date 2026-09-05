@@ -3,11 +3,10 @@ import munit.FunSuite
 import scala.quoted.Type
 import scala.quoted.Expr
 import scala.quoted.Quotes
-import streamInternal.Stream
 import scala.quoted.*
 import scala.quoted.staging.*
-import fuse.FusedStream.map
-import fuse.FusedStream.filter
+import fuse.{FusedStream, Collector}
+import FusedStream.*
 
 class ParserTest extends FunSuite {
   given Compiler = Compiler.make(getClass.getClassLoader)
@@ -17,8 +16,9 @@ class ParserTest extends FunSuite {
       val parser = Parser(ir) // Assumendo che Parser accetti (ir)
 
       // 1. Creiamo un'espressione quote che simula la catena stream.map(...).filter(...)
-      val mockStreamExpr: Expr[streamInternal.Stream[String]] = '{
-        FusedStream.of(2)
+      val mockStreamExpr: Expr[Stream[String]] = '{
+        FusedStream
+          .of(2)
           .map((x: Int) => x * 2) // Step 1: Map
           .filter((z: Int) => z > 5) // Step 2: Filter
           .map((z: Int) => s"Risultato: $z") // Step 3: Altra Map
@@ -33,14 +33,14 @@ class ParserTest extends FunSuite {
       def getPrevious(arg0: parser.ir.StreamTree[?]) = {
         arg0 match {
           case p: parser.ir.WithUpstream[?] => p.upstream
-          case _                                 => null
+          case _                            => null
         }
       }
       assert(astResult != null)
 
       // Map
       assertEquals(astResult.parsedStream.getClass().getName(), "fuse.StreamIr$Map")
-      
+
       // Map
       var prev = getPrevious(astResult.parsedStream)
       assertEquals(prev.getClass().getName(), "fuse.StreamIr$Map")

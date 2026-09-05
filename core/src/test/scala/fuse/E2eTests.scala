@@ -1,12 +1,7 @@
 package fuse
 import munit.FunSuite
-import fuse.FusedStream
-import fuse.FusedStream.collect
-import fuse.FusedStream.skip
-import fuse.FusedStream.limit
-import fuse.FusedStream.filter
-import fuse.FusedStream.map
-import fuse.FusedStream.flatMap
+import fuse.{FusedStream, Collector}
+import FusedStream.*
 import scala.annotation.static
 
 object E2eTests {
