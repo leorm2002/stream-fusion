@@ -51,6 +51,11 @@ object FusedStream {
   @compileTimeOnly("FusedStream.from can only be used in a pipeline terminated by .collect(...)")
   def from[A](source: Iterable[A]): Stream[A] = compileTimeOnly
 
+  /** Initialize a stream, takes as input an iterable (could be limitless) source
+    */
+  @compileTimeOnly("FusedStream.from can only be used in a pipeline terminated by .collect(...)")
+  def from[A](source: java.lang.Iterable[A]): Stream[A] = compileTimeOnly
+
   /** Creates a stream from an array, this kind of source may give better performance, especially compare to an iterable over boxed numeric types
     */
   @compileTimeOnly("FusedStream.from can only be used in a pipeline terminated by .collect(...)")

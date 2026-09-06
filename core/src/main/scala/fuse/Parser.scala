@@ -79,8 +79,23 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     val sourceTpr = getTypeRepr(term)
     val arraySymbol = TypeRepr.of[Array].typeSymbol
     val iterableSymbol = TypeRepr.of[Iterable].typeSymbol
+    val javaList = TypeRepr.of[java.util.List].typeSymbol
+    val javaIterableSymbol = TypeRepr.of[java.lang.Iterable].typeSymbol
     // Specialize the different sources, so we can access the most efficient way
     sourceTpr match {
+      // E' una specializzazione di un javaIterableSymbol, abbiamo assunzioni particolari se abbiamo una list da fare che velocizzano l'esecuzione
+      case jlist if jlist.derivesFrom(javaList) =>
+        jlist.baseType(javaList) match {
+          case AppliedType(_, List(elemTpe)) =>
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](JListSource[elem](term.asExprOf[java.util.List[elem]], Type.of[elem]), Nil) }
+        }
+
+      case jiter if jiter.derivesFrom(javaIterableSymbol) =>
+        jiter.baseType(javaIterableSymbol) match {
+          case AppliedType(_, List(elemTpe)) =>
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](JIterableSource[elem](term.asExprOf[java.lang.Iterable[elem]], Type.of[elem]), Nil) }
+        }
+
       case arr if arr.derivesFrom(arraySymbol) =>
         arr.baseType(arraySymbol) match {
           case AppliedType(_, List(elemTpe)) => getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](ArraySource[elem](term.asExprOf[Array[elem]], Type.of[elem]), Nil) }

@@ -16,7 +16,17 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
     val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
     val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](optimizedStream, earlyRef.toList)
 
-    AstExt(enrichedStream, ast.prefixStatements ::: declarations ::: exitDeclarations, EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs))
+    // Verifica se gli indici di produzione sono 1:1 con quelli della fonte
+    val hasAlignedIndexes = checkAlignedIndexes(enrichedStream)
+    // Estrae, se è presente, l'esrpressione che definisce l'upper bound della fonte
+    val outputCardinalityUpperBound = extractSourceSize(ast.parsedStream)
+    AstExt(
+      enrichedStream,
+      ast.prefixStatements ::: declarations ::: exitDeclarations,
+      EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs),
+      hasAlignedIndexes,
+      outputCardinalityUpperBound
+    )
   }
 
   private def enrich[OUT, Buf, R](strategy: CollectionStrategy[OUT, Buf, R]): (Option[Expr[Boolean]], List[Statement]) = {
@@ -62,8 +72,10 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
         FlatMap(optimize(flatMap.upstream), optimize(flatMap.innerTree), flatMap.inType, flatMap.outType, flatMap.elemSymbol, flatMap.innerDeclarations)
 
       // ========== Root nodes ==========
-      case source: ArraySource[in]    => source
-      case source: IterableSource[in] => source // It's the root nodw
+      case source: JListSource[in]     => source
+      case source: ArraySource[in]     => source
+      case source: IterableSource[in]  => source // It's the root nodw
+      case source: JIterableSource[in] => source // It's the root nodw
 
     }
 
@@ -159,8 +171,10 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
       }
 
       // ============ Root nodes ============
-      case source: IterableSource[in] => (source, Nil, exitPredicates) // It's the root nodw
-      case source: ArraySource[in]    => (source, Nil, exitPredicates) // It's the root nodw
+      case source: JListSource[in]     => (source, Nil, exitPredicates) // It's the root nodw
+      case source: IterableSource[in]  => (source, Nil, exitPredicates) // It's the root nodw
+      case source: JIterableSource[in] => (source, Nil, exitPredicates) // It's the root nodw
+      case source: ArraySource[in]     => (source, Nil, exitPredicates) // It's the root nodw
 
     }
 
@@ -197,4 +211,59 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
       case _                             => false
     }
   }
+
+  /** Verifica ricorsivamente se lo stream conserva una corrispondenza posizionale sorgente e accumulatore
+    */
+  private def checkAlignedIndexes(tree: StreamTree[?]): Boolean = {
+    tree match {
+      // Radici supportate con indice 0..len-1 nativo
+      case _: JListSource[?] => true
+      case _: ArraySource[?] => true
+
+      // Trasformazione 1:1 che preserva l'indice (propaga a monte)
+      case map: Map[?, ?] => checkAlignedIndexes(map.upstream)
+
+      // Operazioni che alterano cardinalità o offset
+      case _: Filter[?]     => false
+      case _: Slice[?]      => false
+      case _: FlatMap[?, ?] => false
+
+      // Radici basate su iteratore (senza indice contiguo)
+      case _: IterableSource[?]  => false
+      case _: JIterableSource[?] => false
+    }
+  }
+
+  /** Estrae l'espressione Expr[Int] che calcola la dimensione massima o esatta della sorgente alla radice. Restituisce None se la dimensione non è determinabile a priori.
+    */
+  private def extractSourceSize(tree: StreamTree[?]): Option[Expr[Int]] = {
+    tree match {
+      // ========== Radici con dimensione nota ==========
+      case source: JListSource[t] =>
+        given Type[t] = source.outType
+        Some('{ ${ source.term }.size() })
+
+      case source: ArraySource[t] =>
+        given Type[t] = source.outType
+        Some('{ ${ source.term }.length })
+
+      // ========== Radici senza dimensione nota ==========
+      case source: IterableSource[?] => None
+
+      case source: JIterableSource[?] => None
+
+      // ========== Operazioni che preservano la cardinalità (1:1) ==========
+      case map: Map[?, ?] => extractSourceSize(map.upstream)
+
+      // ========== Operazioni che riducono la cardinalità (Upper Bound noto) ==========
+      case filter: Filter[?] => extractSourceSize(filter.upstream)
+
+      case slice: Slice[?] => extractSourceSize(slice.upstream)
+
+      // ========== Operazioni che espandono la cardinalità (Size non prevedibile) ==========
+      case flatMap: FlatMap[?, ?] => None
+
+    }
+  }
+
 }

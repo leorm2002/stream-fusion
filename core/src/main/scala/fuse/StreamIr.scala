@@ -21,8 +21,14 @@ class StreamIr(using val quotes: Quotes) {
     def upstream: StreamTree[A]
   }
 
+  /** Represent a (java) List structure used as the source of element for the stream computation */
+  final case class JListSource[A](term: Expr[java.util.List[A]], outType: Type[A]) extends StreamTree[A]
+
   /** Represent an iterable data structure used as the source of element for the stream computation */
   final case class IterableSource[A](term: Expr[Iterable[A]], outType: Type[A]) extends StreamTree[A]
+
+  /** Represent a (java) iterable data structure used as the source of element for the stream computation */
+  final case class JIterableSource[A](term: Expr[java.lang.Iterable[A]], outType: Type[A]) extends StreamTree[A]
 
   /** Represent an array structure used as the source of element for the stream computation */
   final case class ArraySource[A](term: Expr[Array[A]], outType: Type[A]) extends StreamTree[A]
@@ -80,7 +86,13 @@ class StreamIr(using val quotes: Quotes) {
 
   /** Represents parsed optimized and enriched stream
     */
-  case class AstExt[A, Buf, R](val enrichedStream: StreamTree[A], val declarations: List[Statement], val collectionStrategy: EnrichedCollectionStrategy[A, Buf, R])
+  case class AstExt[A, Buf, R](
+      val enrichedStream: StreamTree[A],
+      val declarations: List[Statement],
+      val collectionStrategy: EnrichedCollectionStrategy[A, Buf, R],
+      val hasAlignedIndexes: Boolean,
+      val outputCardinalityUpperBound: Option[Expr[Int]]
+  )
 
   /** Represents a limit operation
     *

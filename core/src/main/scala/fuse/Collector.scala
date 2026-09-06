@@ -5,8 +5,10 @@ import scala.annotation.compileTimeOnly
 import scala.collection.mutable.ListBuffer
 import fuse.Collector.toList
 import fuse.Collector.findFirst
+import java.util.LinkedList
 // --- Collector (like Java's Collector<T, A, R>) ---
 trait Collector[T, Buf, R] {
+  def supplier(count: Int): Buf = supplier()
   def supplier(): Buf
 
   /** @return
