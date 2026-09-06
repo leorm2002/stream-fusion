@@ -1,6 +1,5 @@
 package fuse
 import scala.quoted.*
-import scala.compiletime.ops.int
 
 final class Optimizer[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
@@ -8,19 +7,19 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
   import ir.*
   import ir.quotes.reflect.*
 
-  def optimize[A, Buf, R](ast: ir.Ast[A, Buf, R]): AstExt[A, Buf, R] = {
+  def optimize[OUT, Buf, R](ast: ir.Ast[OUT, Buf, R]): AstExt[OUT, Buf, R] = {
 
     // Stream optimization
     val optimizedStream = optimize(ast.parsedStream)
 
     // Stream enrichment
     val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
-    val (enrichedStream, declarations, earlyExitRefs) = enrich[A](optimizedStream, earlyRef.toList)
+    val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](optimizedStream, earlyRef.toList)
 
-    AstExt(enrichedStream, declarations ::: exitDeclarations, EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs))
+    AstExt(enrichedStream, ast.prefixStatements ::: declarations ::: exitDeclarations, EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs))
   }
 
-  private def enrich[A, Buf, R](strategy: CollectionStrategy[A, Buf, R]): (Option[Expr[Boolean]], List[Statement]) = {
+  private def enrich[OUT, Buf, R](strategy: CollectionStrategy[OUT, Buf, R]): (Option[Expr[Boolean]], List[Statement]) = {
 
     strategy match {
       // If is a toArray strategy no enrichment is needed it will be handled completely in the code generation phase with native types specializtion
@@ -46,79 +45,25 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  def optimize[A](parsedStream: StreamTree[A]): StreamTree[A] = {
+  def optimize[OUT](parsedStream: StreamTree[OUT]): StreamTree[OUT] = {
     println(s"[Optimizing Node] => $parsedStream")
 
     parsedStream match {
-      // TODO: here match on the node: if it's a node which opens a new scope or a nested stream? (ex flatMap) stop the bubbling
+      // TODO: change limit and skip to a slice, maybe at parse time
 
       // Both limit and skip have no possible optimizations
-      case Limit(upstream, count, outType) => Limit(optimize(upstream), count, outType)
-      case Skip(upstream, count, outType)  => Skip(optimize(upstream), count, outType)
+      case Slice(upstream, count, count2, outType) => Slice(optimize(upstream), count, count2, outType)
 
-      // Map fuse, concatenate two sequential mapping
-      case map2 @ Map(map1 @ Map(upstream, f, inTypeA, outTypeB), g, _, outTypeC) => {
-        // m2.function è Expr[b => c]
-        (map1, map2) match {
-          case (m1: Map[a, b], m2: Map[?, c]) => {
-            given Type[a] = m1.inType
-            given Type[b] = m1.outType
-            given Type[c] = m2.outType
+      case map: Map[in, OUT] => Map[in, OUT](upstream = optimize(map.upstream), function = map.function, inType = map.inType, outType = map.outType)
 
-            // f: Expr[a => b]
-            // g: Expr[b => c]
-            val fusedFunction: Expr[a => c] = '{ (x: a) =>
-              ${ Expr.betaReduce('{ ${ m2.function }(${ Expr.betaReduce('{ ${ m1.function }(x) }) }) }) }
-            }
+      case filter: Filter[OUT] => Filter[OUT](upstream = optimize(filter.upstream), predicate = filter.predicate, outType = filter.outType)
 
-            val fusedMap = Map[a, c](upstream.asInstanceOf[StreamTree[a]], fusedFunction, m1.inType, m2.outType)
-            // Recursively call the optimize on the new obtained map
-            optimize(fusedMap)
-          }
-        }
-      }
-      // A map alone no optimizations
-      case Map(upstream, function, b, c) => {
-        Map(optimize(upstream), function, b, c)
-      }
-      // Filter fuse, concatenate two sequential filtering
-      case f2 @ Filter(f1 @ Filter(upstream, p1, inType1), p2, inType2) => {
-        // Beta reducing the filter operations
-        (f1, f2) match {
-          case (filter1: Filter[a], filter2: Filter[?]) => {
-            given Type[a] = filter1.outType
+      case flatMap: FlatMap[in, OUT] =>
+        FlatMap(optimize(flatMap.upstream), optimize(flatMap.innerTree), flatMap.inType, flatMap.outType, flatMap.elemSymbol, flatMap.innerDeclarations)
 
-            // La nuova lambda fusa prende (x: a) e usa il corto circuito logico (&&)
-            val fusedPredicate: Expr[a => Boolean] = '{ (x: a) => ${ Expr.betaReduce('{ ${ filter1.predicate }(x) }) } && ${ Expr.betaReduce('{ ${ filter2.predicate }(x) }) } }
-            val fusedFilter = Filter[a](upstream.asInstanceOf[StreamTree[A]], fusedPredicate, f1.outType)
-            // Recursively call the optimize on the new obtained filter
-            optimize(fusedFilter)
-          }
-        }
-      }
-      case filter @ Filter(upstream, predicate, b) => {
-        Filter[A](optimize(upstream), predicate, b)
-      }
-
-      case FlatMap(upstream, innerTree, inType, outType, elemSymbol, innerDeclarations) =>
-
-        type IN = Any
-        type OUT = A
-        given Type[IN] = inType.asInstanceOf[Type[IN]]
-        given Type[OUT] = outType.asInstanceOf[Type[OUT]]
-
-        val elemSym = createConstant[IN]("outerElem")
-
-        // Optimize the inner stream itself
-        val optimizedInnerTree = optimize(innerTree)
-
-        // Ricostruiamo la lambda ottimizzata o preserviamo il nodo con l'inner stream già parsato/ottimizzato
-        val optimizedUpstream = optimize(upstream)
-
-        FlatMap(optimizedUpstream, optimizedInnerTree, inType, outType, elemSymbol, innerDeclarations)
-
-      case source @ ArraySource(_, _)    => source // It's the root nodw
-      case source @ IterableSource(_, _) => source // It's the root nodw
+      // ========== Root nodes ==========
+      case source: ArraySource[in]    => source
+      case source: IterableSource[in] => source // It's the root nodw
 
     }
 
@@ -128,95 +73,128 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
     *
     * @param parsedStream
     */
-  private def enrich[A](parsedStream: StreamTree[A], exitPredicates: List[Expr[Boolean]])(using Quotes): (StreamTree[A], List[Statement], List[Expr[Boolean]]) = {
+  private def enrich[OUT](parsedStream: StreamTree[OUT], exitPredicates: List[Expr[Boolean]])(using Quotes): (StreamTree[OUT], List[Statement], List[Expr[Boolean]]) = {
 
     // Recursevly enrich upstream (bottom up)
     println(s"[Enriching Node] => $parsedStream")
 
     parsedStream match {
-      // TODO: here match on the node: if it's a node which opens a new scope or a nested stream? (ex flatMap) stop the bubbling
-      case Limit(upstream, count, outType) => {
-        // Enrich the upstream first
+      case slice: Slice[OUT] => {
+        // Evaluate slice bounds exactly once
+        val (fromRef, fromDeclarations) = slice.from match {
+          case Some(from) => {
+            val (ref, definition) = materializeInt("sliceFrom", from)
+            (Some(ref), List(definition))
+          }
+          case None => (None, Nil)
+        }
 
-        // Now create the counter state
-        val counterSymbol = createVariable[Int]("limitCounter")
-        val valDef = createDef(counterSymbol, 0)
+        val (untilRef, untilDeclarations) = slice.until match {
+          case Some(until) => {
+            val (ref, definition) = materializeInt("sliceUntil", until)
+            (Some(ref), List(definition))
+          }
+          case None => (None, Nil)
+        }
+
+        // Single position counter for the whole slice
+        val counterSymbol = createVariable[Int]("sliceCounter")
+        val counterDef = createDef(counterSymbol, 0)
         val counterRef = Ref(counterSymbol).asExprOf[Int]
 
-        // Build the predicate associated with the symbol
-        val localPredicate: Expr[Boolean] = '{ $counterRef < ${ Expr(count) } }
-        val currentExitPredicates = localPredicate :: exitPredicates
-        val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(upstream, currentExitPredicates)
-        // Step C: Construct enriched node holding the reference
-        val enrichedLimit = EnrichedLimit(
-          upstream = enrichedUpstream,
-          count = count,
-          outType = outType,
-          counterRef = counterRef
-        )
+        // `until` can stop traversal completely, so bubble it down to the source.
+        val currentExitPredicates = untilRef match {
+          case Some(until) => '{ $counterRef < $until } :: exitPredicates
+          case None        => exitPredicates
+        }
 
-        // Bubble up the variable declarations plus the hoters
-        (enrichedLimit, upstreamDeclarations :+ valDef, outPred)
+        val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(slice.upstream, currentExitPredicates)
+
+        val enrichedSlice = EnrichedSlice[OUT](upstream = enrichedUpstream, from = fromRef, until = untilRef, outType = slice.outType, counterRef = counterRef)
+
+        (enrichedSlice, upstreamDeclarations ::: fromDeclarations ::: untilDeclarations ::: List(counterDef), outPred)
       }
 
-      case Skip(upstream, count, outType) => {
-        val counterSymbol = createVariable[Int]("skipCounter")
-        val valDef = createDef(counterSymbol, 0)
-        val counterRef = Ref(counterSymbol).asExprOf[Int]
+      case map: Map[in, OUT] => {
+        given Type[in] = map.inType
+        given Type[OUT] = map.outType
 
-        // Enrich the upstream first
-        val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(upstream, exitPredicates)
-        // Construct enriched node holding the reference
-        val enrichedSkip = EnrichedSkip(enrichedUpstream, count, outType, counterRef)
-
-        // Bubble up the variable declarations plus the hoters
-        (enrichedSkip, upstreamDeclarations :+ valDef, outPred)
+        // Materialize the function, if it's somthing like makeMapper() we create the mapper only once and assign it to a constant
+        val (functionRef, functionDeclarations) = materializeFunction[in, OUT]("mapFunction", map.function)
+        val (enrichedUpstream, declarations, predicates) = enrich[in](map.upstream, exitPredicates)
+        val enrichedMap = Map[in, OUT](enrichedUpstream, functionRef, map.inType, map.outType)
+        (enrichedMap, declarations ::: functionDeclarations, predicates)
       }
 
-      case Map(upstream, a, b, c) => {
-        val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(upstream, exitPredicates)
-        val enrichedMap = Map(enrichedUpstream, a, b, c)
-        (enrichedMap, upstreamDeclarations, outPred)
+      case filter: Filter[OUT] => {
+        given Type[OUT] = filter.outType
+
+        // Materialize the function, if it's somthing like makeFilter() we create the mapper only once and assign it to a constant
+        val (predicateRef, predicateDeclarations) = materializeFunction[OUT, Boolean]("filterPredicate", filter.predicate)
+        val (enrichedUpstream, declarations, predicates) = enrich[OUT](filter.upstream, exitPredicates)
+        val enrichedFilter = Filter[OUT](enrichedUpstream, predicateRef, filter.outType)
+        (enrichedFilter, declarations ::: predicateDeclarations, predicates)
       }
 
-      case Filter(upstream, a, b) => {
-        val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(upstream, exitPredicates)
-        val enrichedFilter = Filter[A](enrichedUpstream, a, b)
-        (enrichedFilter, upstreamDeclarations, outPred)
-
-      }
-
-      case source @ IterableSource(_, _) => (source, Nil, exitPredicates) // It's the root nodw
-      case source @ ArraySource(_, _)    => (source, Nil, exitPredicates) // It's the root nodw
-
-      case fm @ FlatMap(upstream, optimizedInnerTree, inType, outType, elemSymbol, declarations) => {
-        type A0 = Any
-        type B = A
-        given Type[A0] = inType.asInstanceOf[Type[A0]]
-        given Type[B] = outType.asInstanceOf[Type[B]]
+      case fm: FlatMap[in, OUT] => {
 
         // Enriche the inner stream, already extracted during the optimization phase, gathers exitPredicates + local predicates to the inner
-        val (innerEnrichedTree, innerDecls, innerAccumulatedPredicates) = enrich[B](optimizedInnerTree.asInstanceOf[StreamTree[B]], exitPredicates)
-        val allInnerDecls = declarations ++ innerDecls
-
+        val (innerEnrichedTree, innerDecls, innerAccumulatedPredicates) = enrich[OUT](fm.innerTree, exitPredicates)
+        val allInnerDecls = fm.innerDeclarations ++ innerDecls
         // Recurisvy Enrich the upstream upstream using the predicates from the level of the flatmap
-        val (enrichedUpstream, upstreamDeclarations, fullExitPredicates) = enrich(upstream, exitPredicates)
+        val (enrichedUpstream, upstreamDeclarations, fullExitPredicates) = enrich[in](fm.upstream, exitPredicates)
 
-        val enrichedFlatMap = EnrichedFlatMap[A0, B](
-          upstream = enrichedUpstream.asInstanceOf[StreamTree[A0]],
-          innerEnrichedTree,
-          inType = inType.asInstanceOf[Type[A0]],
-          outType = outType.asInstanceOf[Type[B]],
-          elemSymbol,
-          innerDeclarations = allInnerDecls,
-          predicates = innerAccumulatedPredicates // Here we have both the predicated from an higher level, and the flatmap one
-        )
+        val enrichedFlatMap =
+          EnrichedFlatMap[in, OUT](
+            upstream = enrichedUpstream,
+            innerTree = innerEnrichedTree,
+            inType = fm.inType,
+            outType = fm.outType,
+            elemSymbol = fm.elemSymbol,
+            innerDeclarations = allInnerDecls,
+            predicates = innerAccumulatedPredicates
+          )
 
-        (enrichedFlatMap.asInstanceOf[StreamTree[A]], upstreamDeclarations, fullExitPredicates)
+        (enrichedFlatMap, upstreamDeclarations, fullExitPredicates)
       }
+
+      // ============ Root nodes ============
+      case source: IterableSource[in] => (source, Nil, exitPredicates) // It's the root nodw
+      case source: ArraySource[in]    => (source, Nil, exitPredicates) // It's the root nodw
 
     }
 
   }
 
+  /** Materializa an expression of int into a constant, this permits to avoid double calls
+    */
+  private def materializeInt(name: String, value: Expr[Int]): (Expr[Int], Statement) = {
+    val symbol = createConstant[Int](name)
+    val definition = ValDef(symbol, Some(value.asTerm))
+    val ref = Ref(symbol).asExprOf[Int]
+    (ref, definition)
+  }
+
+  private def materializeFunction[IN: Type, OUT: Type](name: String, function: Expr[IN => OUT]): (Expr[IN => OUT], List[Statement]) = {
+
+    if (isDirectLambda(function.asTerm)) {
+      (function, Nil)
+    } else {
+      val symbol = createConstant[IN => OUT](name)
+      val definition = ValDef(symbol, Some(function.asTerm))
+      val ref = Ref(symbol).asExprOf[IN => OUT]
+
+      (ref, List(definition))
+    }
+  }
+
+  private def isDirectLambda(term: Term): Boolean = {
+    term match {
+      case Inlined(_, Nil, inner) => isDirectLambda(inner)
+      // Type  Block(List(DefDef("$anonfun", ...)), Closure(...))
+      case Block(statements, _: Closure) => statements.forall(_.isInstanceOf[DefDef])
+      case Lambda(_, _)                  => true
+      case _                             => false
+    }
+  }
 }

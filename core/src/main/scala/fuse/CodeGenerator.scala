@@ -139,18 +139,14 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR) {
 
   private def buildBody[A](tree: StreamTree[A], emit: Expr[A] => Expr[Unit], exitPredicates: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
     tree match {
-      case source: IterableSource[A] => buildIterableSource(source, emit, exitPredicates)
-      case source: ArraySource[A]    => buildArraySource(source, emit, exitPredicates)
-      case filter: Filter[A]         => buildFilter(filter, emit, exitPredicates)
-      case map: Map[?, ?]            => buildMap(map, emit, exitPredicates)
-      case skip: EnrichedSkip[A]     => buildSkip(skip, emit, exitPredicates)
-      case limit: EnrichedLimit[A]   => buildLimit(limit, emit, exitPredicates)
-      case skip: Skip[A]             => ??? // TODO: if we end up here there is a optimization error
-      case limit: Limit[A]           => ??? // TODO: if we end up here there is a optimization error
-
+      case source: IterableSource[A]       => buildIterableSource(source, emit, exitPredicates)
+      case source: ArraySource[A]          => buildArraySource(source, emit, exitPredicates)
+      case filter: Filter[A]               => buildFilter(filter, emit, exitPredicates)
+      case map: Map[?, ?]                  => buildMap(map, emit, exitPredicates)
+      case slice: EnrichedSlice[A]         => buildSlice(slice, emit, exitPredicates)
+      case skip: Slice[A]                  => report.errorAndAbort("Internal compiler error: non-enriched Skip reached CodeGenerator")
       case flatmap: EnrichedFlatMap[a0, b] => buildFlatMap(flatmap, emit, exitPredicates)
-
-      case FlatMap(_, _, _, _, _, _) => ???
+      case FlatMap(_, _, _, _, _, _)       => report.errorAndAbort("Internal compiler error: non-enriched Skip reached CodeGenerator")
     }
   }
   private def buildFlatMap[A0, B](flatMap: EnrichedFlatMap[A0, B], emit: Expr[B] => Expr[Unit], exitPredicates: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
@@ -177,46 +173,33 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR) {
     // Generate the body of the upstream, emitting into the flatmap
     buildBody[A0](flatMap.upstream, flatMapEmit, exitPredicates)
   }
+  private def buildSlice[A](slice: EnrichedSlice[A], emit: Expr[A] => Expr[Unit], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+    given Type[A] = slice.outType
 
-  private def buildLimit[A](skip: EnrichedLimit[A], emit: Expr[A] => Expr[Unit], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
-    given Type[A] = skip.outType
-
-    val counterRef: Expr[Int] = skip.counterRef
-    val limit: Expr[Int] = Expr(skip.count)
+    val counterRef = slice.counterRef
 
     buildBody[A](
-      skip.upstream,
+      slice.upstream,
       elem => {
-        // Manually build: counter = counter + 1
-        val assignTerm = Assign(counterRef.asTerm, '{ $counterRef + 1 }.asTerm)
-        val incrementExpr = assignTerm.asExprOf[Unit]
+        val incrementTerm = Assign(counterRef.asTerm, '{ $counterRef + 1 }.asTerm)
+        val incrementExpr = incrementTerm.asExprOf[Unit]
 
-        '{
-          $incrementExpr
-          ${ emit(elem) }
-        }
-      },
-      earlyExitRef
-    )
-  }
-  private def buildSkip[A](skip: EnrichedSkip[A], emit: Expr[A] => Expr[Unit], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
-    given Type[A] = skip.outType
+        slice.from match {
+          case Some(from) => {
+            '{
+              if ($counterRef >= $from) {
+                ${ emit(elem) }
+              }
 
-    val counterRef: Expr[Int] = skip.counterRef
-    val limit: Expr[Int] = Expr(skip.count)
+              $incrementExpr
+            }
+          }
 
-    buildBody[A](
-      skip.upstream,
-      elem => {
-        // Manually build: counter = counter + 1
-        val assignTerm = Assign(counterRef.asTerm, '{ $counterRef + 1 }.asTerm)
-        val incrementExpr = assignTerm.asExprOf[Unit]
-
-        '{
-          if ($counterRef >= $limit) {
-            ${ emit(elem) }
-          } else {
-            $incrementExpr
+          case None => {
+            '{
+              ${ emit(elem) }
+              $incrementExpr
+            }
           }
         }
       },
@@ -238,7 +221,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR) {
       while (
         ${
           exitCond match {
-            case Some(cond) => '{ iterator.hasNext && $cond }
+            case Some(cond) => '{ $cond && iterator.hasNext }
             case None       => '{ iterator.hasNext }
           }
         }

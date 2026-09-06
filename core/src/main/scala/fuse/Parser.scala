@@ -36,7 +36,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     println("Terminal parsing done")
     println("Parsing the done")
 
-    Ast(parsedTree.getCurrent(), parsedCollector)
+    Ast(parsedTree.getCurrent(), parsedCollector, parsedTree.declarations)
   }
 
   private def parseTerm(expr: ir.quotes.reflect.Term): ParsedTree = {
@@ -54,27 +54,20 @@ final class Parser[IR <: AnyIR](val ir: IR) {
       // Of
       case Apply(TypeApply(NamedMethod("of"), _), List(arr)) => createSourceOf(arr)
 
-      /** ====================  (filter, skip, limit) ==================== */
-      case UnaryOperator(name, upstream, arg) => {
-        val parsedUpstream = parseTerm(upstream)
-        name match {
-          case "filter" => appendFilter(parsedUpstream, arg)
-          case "skip"   => appendSkip(parsedUpstream, arg)
-          case "limit"  => appendLimit(parsedUpstream, arg)
-          case _        => report.errorAndAbort(s"StreamFusion: operator non supportato: $name")
-        }
-      }
+      /** ====================      (filter)   ==================== */
+      case Apply(Select(upstream, "filter"), List(pred)) => appendFilter(parseTerm(upstream), pred)
 
-      /** ==================== Map / FlatMap) ==================== */
-      case OperatorWithOutput(name, upstream, f, outType) => {
-        val parsedUpstream = parseTerm(upstream)
+      /** ====================      (skip)     ==================== */
+      case Apply(Select(upstream, "skip"), List(n)) => appendSkip(parseTerm(upstream), n)
 
-        name match {
-          case "map"     => appendMap(parsedUpstream, f, outType)
-          case "flatMap" => appendFlatMap(parsedUpstream, f, outType)
-          case _         => report.errorAndAbort(s"StreamFusion: trasforma sconosciuta: $name")
-        }
-      }
+      /** ====================      (limit)    ==================== */
+      case Apply(Select(upstream, "limit"), List(n)) => appendLimit(parseTerm(upstream), n)
+
+      /** ====================      (Map)      ==================== */
+      case Apply(TypeApply(Select(upstream, "map"), List(outType: TypeTree)), List(f)) => appendMap(parseTerm(upstream), f, outType)
+
+      /** ====================      (FlatMap)  ==================== */
+      case Apply(TypeApply(Select(upstream, "flatMap"), List(outType: TypeTree)), List(f)) => appendFlatMap(parseTerm(upstream), f, outType)
 
       /** ==================================== Error fallback ==================================== */
       case other => report.errorAndAbort(s"StreamFusion: unexpected expression: ${other}")
@@ -90,12 +83,13 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     sourceTpr match {
       case arr if arr.derivesFrom(arraySymbol) =>
         arr.baseType(arraySymbol) match {
-          case AppliedType(_, List(elemTpe)) => getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](ArraySource[elem](term.asExprOf[Array[elem]], Type.of[elem])) }
+          case AppliedType(_, List(elemTpe)) => getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](ArraySource[elem](term.asExprOf[Array[elem]], Type.of[elem]), Nil) }
         }
 
       case iter if iter.derivesFrom(iterableSymbol) =>
         iter.baseType(iterableSymbol) match {
-          case AppliedType(_, List(elemTpe)) => getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](IterableSource[elem](term.asExprOf[Iterable[elem]], Type.of[elem])) }
+          case AppliedType(_, List(elemTpe)) =>
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](IterableSource[elem](term.asExprOf[Iterable[elem]], Type.of[elem]), Nil) }
         }
       case _ => report.errorAndAbort(s"StreamFusion: from() expected one of Iterable[T]/Array[T], got ${sourceTpr}", term.pos)
     }
@@ -109,7 +103,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
         //  Given the type of the element elem at runtime it will be converted to an iteratorable and enter in the from(iterable<>) flow. this can be optimized
         val singleExpr = item.asExprOf[elem]
         val iterableExpr: Expr[Iterable[elem]] = '{ Iterable.single[elem](${ singleExpr }) }
-        ParsedTreeImpl[elem](IterableSource[elem](iterableExpr, Type.of[elem]))
+        ParsedTreeImpl[elem](IterableSource[elem](iterableExpr, Type.of[elem]), Nil)
     }
   }
 
@@ -121,31 +115,26 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     val predicate = predicateTerm.asExprOf[InOut => Boolean]
     val filter = Filter[InOut](upstream.current, predicate, upstream.outType)
 
-    ParsedTreeImpl[InOut](filter)
+    ParsedTreeImpl[InOut](filter, upstream.declarations)
   }
 
   private def appendSkip(upstream: ParsedTree, skipTerm: Term): ParsedTree = {
     // The skip do not alter the type
     type InOut = upstream.Out
 
-    val skipNum = skipTerm.asExprOf[Int].value.getOrElse {
-      report.errorAndAbort(s"StreamFusion: 'skip' requires a constant Int known at compile-time. Got: ${skipTerm}", skipTerm.pos)
-    }
-
-    val skip = Skip[InOut](upstream.current, skipNum, upstream.outType)
-    ParsedTreeImpl[InOut](skip)
+    val skipNum = skipTerm.asExprOf[Int]
+    val skip = Slice[InOut](upstream.current, Option(skipNum), Option.empty, upstream.outType)
+    ParsedTreeImpl[InOut](skip, upstream.declarations)
   }
 
   private def appendLimit(upstream: ParsedTree, limitTerm: Term): ParsedTree = {
     // The skip do not alter the type
     type InOut = upstream.Out
 
-    val limitNum = limitTerm.asExprOf[Int].value.getOrElse {
-      report.errorAndAbort(s"StreamFusion: 'skip' requires a constant Int known at compile-time. Got: ${limitTerm}", limitTerm.pos)
-    }
+    val limitNum = limitTerm.asExprOf[Int]
+    val limit = Slice[InOut](upstream.current, Option.empty, Option(limitNum), upstream.outType)
 
-    val skip = Limit[InOut](upstream.current, limitNum, upstream.outType)
-    ParsedTreeImpl[InOut](skip)
+    ParsedTreeImpl[InOut](limit, upstream.declarations)
   }
 
   private def appendFlatMap(upstream: ParsedTree, functionTerm: Term, outputType: TypeTree): ParsedTree = {
@@ -210,7 +199,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
         // Cast the function term to an actual Function
         val function = functionTerm.asExprOf[In => out]
         val map = Map[In, out](upstream.current, function, upstream.outType, Type.of[out])
-        ParsedTreeImpl[out](map)
+        ParsedTreeImpl[out](map, upstream.declarations)
     }
   }
 
@@ -260,7 +249,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
   /** Convert a typeTree to his type Type[?] this can be pattern matched to extrat a type to use in quoted expressions */
   @targetName("getTypeFromTree")
   private def getType(typeTree: TypeTree) = {
-    typeTree.tpe.asType
+    typeTree.tpe.widen.dealias.asType
   }
 
   /** Convert a term to his type Type[?] this can be pattern matched to extrat a type to use in quoted expressions */
@@ -278,36 +267,6 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  // Riconosce la struttura del secondo TypeApply (es. per map/flatMap)
-  // Estrae (upstream, f, Option[TypeTree]) gestendo sia la presenza che l'assenza del TypeTree di output
-  object OperatorWithOutput {
-
-    def unapply(term: Term): Option[(String, Term, Term, TypeTree)] =
-      term match {
-        case Apply(
-              TypeApply(
-                Select(upstream, name @ ("map" | "flatMap")),
-                List(outType: TypeTree)
-              ),
-              List(f)
-            ) =>
-          Some((name, upstream, f, outType))
-
-        case _ =>
-          None
-      }
-  }
-  object UnaryOperator {
-    def unapply(term: Term): Option[(String, Term, Term)] = term match {
-      case Apply(
-            Select(upstream, name @ ("filter" | "skip" | "limit")),
-            List(arg)
-          ) =>
-        Some((name, upstream, arg))
-      case _ => None
-    }
-  }
-
   private sealed trait ParsedTree {
     type Out
 
@@ -320,7 +279,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  private final case class ParsedTreeImpl[A](current: StreamTree[A], declarations: List[ir.quotes.reflect.Statement] = Nil) extends ParsedTree {
+  private final case class ParsedTreeImpl[A](current: StreamTree[A], declarations: List[ir.quotes.reflect.Statement]) extends ParsedTree {
     type Out = A
   }
 }

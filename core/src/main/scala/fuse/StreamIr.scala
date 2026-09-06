@@ -33,11 +33,8 @@ class StreamIr(using val quotes: Quotes) {
   /** Represents a map operation X -> T and one to one cardinality */
   final case class Map[A, B](upstream: StreamTree[A], function: Expr[A => B], inType: Type[A], outType: Type[B]) extends StreamTree[B] with WithUpstream[A]
 
-  /** Represent a skip operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
-  case class Skip[A](upstream: StreamTree[A], count: Int, outType: Type[A]) extends StreamTree[A] with WithUpstream[A]
-
-  /** Represent a limit operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
-  case class Limit[A](upstream: StreamTree[A], count: Int, outType: Type[A]) extends StreamTree[A] with WithUpstream[A]
+  /** Represent a slice operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
+  case class Slice[A](upstream: StreamTree[A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A]) extends StreamTree[A] with WithUpstream[A]
 
   /** Sealed hierarchy with the possible collection mode */
   sealed trait CollectionStrategy[A, Buf, R]
@@ -49,7 +46,7 @@ class StreamIr(using val quotes: Quotes) {
   final case class WithCollector[A, Buf, R](collector: Expr[Collector[A, Buf, R]]) extends CollectionStrategy[A, Buf, R]
 
   /** The base AST, abtained by the parsing phase */
-  case class Ast[A, Buf, R](parsedStream: StreamTree[A], collectionStrategy: CollectionStrategy[A, Buf, R])
+  case class Ast[A, Buf, R](parsedStream: StreamTree[A], collectionStrategy: CollectionStrategy[A, Buf, R], prefixStatements: List[Statement])
 
   /** A flat map operation
     *
@@ -85,31 +82,21 @@ class StreamIr(using val quotes: Quotes) {
     */
   case class AstExt[A, Buf, R](val enrichedStream: StreamTree[A], val declarations: List[Statement], val collectionStrategy: EnrichedCollectionStrategy[A, Buf, R])
 
-  /** Represents a skip operation, it includes the ref to the variable wich signal to start taking elements
-    *
-    * @param upstream
-    *   nodes of the streams who preceed the skip
-    * @param count
-    *   number of elements to skip
-    * @param outType
-    *   output type of the skip (it's the same as the input)
-    * @param counterRef
-    *   reference the boolean variable dynamically created at compile time which singal to start take elements
-    */
-  class EnrichedSkip[A](upstream: StreamTree[A], count: Int, outType: Type[A], val counterRef: Expr[Int]) extends Skip[A](upstream, count, outType)
-
   /** Represents a limit operation
     *
     * @param upstream
     *   nodes of the streams who preceed the skip
     * @param count
+    *   number of elements to skip
+    * @param until
     *   number of elements to limit
     * @param outType
     *   output type of the skip (it's the same as the input)
     * @param counterRef
     *   reference the boolean variable dynamically created at compile time which singal to stop take elements
     */
-  class EnrichedLimit[A](upstream: StreamTree[A], count: Int, outType: Type[A], val counterRef: Expr[Int]) extends Limit[A](upstream, count, outType)
+  class EnrichedSlice[A](upstream: StreamTree[A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A], val counterRef: Expr[Int])
+      extends Slice[A](upstream, from, until, outType)
 
   /** Represents a collector enriched with:
     * @param earlyExitVar
@@ -138,7 +125,7 @@ class StreamIr(using val quotes: Quotes) {
     ValDef(symbol, Some(Literal(BooleanConstant(value))))
   }
 
-   def createConstant[T: Type](name: String) = {
+  def createConstant[T: Type](name: String) = {
     Symbol.newVal(
       parent = Symbol.spliceOwner,
       name = Symbol.freshName(name),
