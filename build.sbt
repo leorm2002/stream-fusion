@@ -18,7 +18,7 @@ ThisBuild / scalacOptions ++= Seq(
 // 1. Root meta-project
 lazy val root = project
   .in(file("."))
-  .aggregate(core, runner)
+  .aggregate(core, runner, benchmarks)
   .settings(
     name := "stream-fusion-root"
   )
@@ -42,4 +42,17 @@ lazy val runner = project
     commonSettings,
     name := "stream-fusion-runner",
     version := projectVesion
+  )
+
+// 4. JMH benchmarks comparing fused pipelines with classic Java streams
+lazy val benchmarks = project
+  .in(file("benchmarks"))
+  .dependsOn(core)
+  .enablePlugins(JmhPlugin)
+  .settings(
+    commonSettings,
+    name := "stream-fusion-benchmarks",
+    version := projectVesion,
+    libraryDependencies += "org.scalameta" %% "munit" % "1.0.0" % Test,
+    publish / skip := true
   )
