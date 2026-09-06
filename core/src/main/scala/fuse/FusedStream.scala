@@ -4,6 +4,7 @@ import scala.quoted.*
 import scala.collection.mutable.ListBuffer
 import scala.reflect.ClassTag
 import scala.collection.mutable.ArrayBuilder
+import scala.annotation.compileTimeOnly
 
 // Represents the possible operations on the stream
 sealed trait Stream[A] {
@@ -47,16 +48,19 @@ object FusedStream {
 
   /** Initialize a stream, takes as input an iterable (could be limitless) source
     */
+  @compileTimeOnly("FusedStream.from can only be used in a pipeline terminated by .collect(...)")
   def from[A](source: Iterable[A]): Stream[A] = compileTimeOnly
 
   /** Creates a stream from an array, this kind of source may give better performance, especially compare to an iterable over boxed numeric types
     */
+  @compileTimeOnly("FusedStream.from can only be used in a pipeline terminated by .collect(...)")
   def from[A](source: Array[A]): Stream[A] = compileTimeOnly
 
   /** Creates a stream from a single element, will throw an exception if the source element is null
     * @param source
     *   the only element in the stream, must not be null
     */
+  @compileTimeOnly("FusedStream.of can only be used in a pipeline terminated by .collect(...)")
   def of[A](source: A): Stream[A] = compileTimeOnly
 
   extension [A](inline self: Stream[A]) {
