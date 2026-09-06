@@ -91,7 +91,7 @@ class StreamIr(using val quotes: Quotes) {
       val declarations: List[Statement],
       val collectionStrategy: EnrichedCollectionStrategy[A, Buf, R],
       val hasAlignedIndexes: Boolean,
-      val outputCardinalityUpperBound: Option[Expr[Int]]
+      val hasKnownSourceSize: Boolean
   )
 
   /** Represents a limit operation
@@ -117,6 +117,10 @@ class StreamIr(using val quotes: Quotes) {
     *   eventual other vairable wich may be added to signal to exti (es. a limit clause)
     */
   case class EnrichedCollectionStrategy[A, Buf, R](collectionStrategy: CollectionStrategy[A, Buf, R], earlyExitVar: Option[Expr[Boolean]], ref: List[Expr[Boolean]])
+
+final case class EnrichedJListSource[A](term: Expr[java.util.List[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[A]
+
+final case class EnrichedArraySource[A](term: Expr[Array[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[A]
 
   /** Represents a flatMap enriched with the list of predicates injected from the outer stream and extracted from the inner one
     */

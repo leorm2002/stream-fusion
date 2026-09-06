@@ -7,15 +7,15 @@ import fuse.Collector.toList
 import fuse.Collector.findFirst
 import java.util.LinkedList
 // --- Collector (like Java's Collector<T, A, R>) ---
-trait Collector[T, Buf, R] {
+trait Collector[ELEM, Buf, RET] {
   def supplier(count: Int): Buf = supplier()
   def supplier(): Buf
 
   /** @return
     *   true if the processing is done
     */
-  def accumulator(buf: Buf, elem: T): Boolean
-  def finisher(buf: Buf): R
+  def accumulator(buf: Buf, elem: ELEM): Boolean
+  def finisher(buf: Buf): RET
 }
 
 trait EarlyStopping
