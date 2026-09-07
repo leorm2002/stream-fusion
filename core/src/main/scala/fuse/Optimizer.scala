@@ -32,8 +32,9 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
   private def enrich[OUT, Buf, R](strategy: CollectionStrategy[OUT, Buf, R]): (Option[Expr[Boolean]], List[Statement]) = {
 
     strategy match {
-      // If is a toArray strategy no enrichment is needed it will be handled completely in the code generation phase with native types specializtion
+      // If is a toArray/Summing strategy no enrichment is needed it will be handled completely in the code generation phase with native types specializtion
       case ToArray() => (None, Nil)
+      case Summing() => (None, Nil)
       // Here we have to emit the variable for exiting the stream: the declaration and the  expsression that links it
       case WithCollector(collector) => {
         val collectorTpe: TypeRepr = collector.asTerm.tpe
@@ -74,6 +75,8 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
       // ========== Root nodes ==========
       case source: JListSource[in]     => source
       case source: ArraySource[in]     => source
+      case source: EnrichedJListSource[in]     => source
+      case source: EnrichedArraySource[in]     => source
       case source: IterableSource[in]  => source // It's the root nodw
       case source: JIterableSource[in] => source // It's the root nodw
 
@@ -192,7 +195,15 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
         val sizeRef = Ref(sizeSymbol).asExprOf[Int]
         val sizeDef = ValDef(sizeSymbol, Some('{ $sourceRef.size() }.asTerm))
         (EnrichedJListSource[OUT](sourceRef, sizeRef, source.outType), List[Statement](sourceDef, sizeDef), exitPredicates)
+    
+      case source: EnrichedArraySource[OUT] => ???
+
+      case source: EnrichedJListSource[OUT] => ???
+
+    
+
     }
+
 
   }
 

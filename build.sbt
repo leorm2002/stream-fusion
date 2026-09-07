@@ -54,5 +54,6 @@ lazy val benchmarks = project
     name := "stream-fusion-benchmarks",
     version := projectVesion,
     libraryDependencies += "org.scalameta" %% "munit" % "1.0.0" % Test,
-    publish / skip := true
+    publish / skip := true,
+    Jmh / javaOptions += "--add-opens=java.base/java.util=ALL-UNNAMED"
   )

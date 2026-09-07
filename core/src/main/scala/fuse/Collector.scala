@@ -26,6 +26,7 @@ final class ToListCollector[T] extends Collector[T, ListBuffer[T], List[T]] {
   def finisher(buf: ListBuffer[T]): List[T] = buf.toList
 }
 
+
 final class ToSetCollector[T] extends Collector[T, scala.collection.mutable.Set[T], Set[T]] {
   def supplier(): scala.collection.mutable.Set[T] = scala.collection.mutable.Set.empty[T]
   def accumulator(buf: scala.collection.mutable.Set[T], elem: T): Boolean = { buf.addOne(elem); false }
@@ -51,6 +52,11 @@ object Collector {
   opaque type ToArrayCollector[T] <: Collector[T, ArrayBuilder[T], Array[T]] = Collector[T, ArrayBuilder[T], Array[T]]
   @compileTimeOnly("Collector.toArray can only be used as a FusedStream terminal collector")
   def toArray[T]: ToArrayCollector[T] = null.asInstanceOf[ToArrayCollector[T]]
+
+  opaque type SummingCollector[T] <: Collector[T, Any, T] = Collector[T, Any, T]
+  @compileTimeOnly("Collector.summing can only be used as a FusedStream terminal collector")
+  def summing[T]: SummingCollector[T] = null.asInstanceOf[SummingCollector[T]]
+
 
 // Compiler specialized buffer
   final class OptionBuffer[@specialized(Int, Long, Double) T] {

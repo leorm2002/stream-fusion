@@ -2,6 +2,8 @@ package fuse
 
 import scala.quoted.*
 import fuse.FusedStream.*
+import java.util.ArrayList
+
 final class CodeGenerator[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
 
@@ -20,15 +22,78 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  def generateCode[ELEM: Type, Buf: Type, OUT: Type](optimizedStream: AstExt[ELEM, Buf, OUT])(using Quotes): Expr[OUT] = {
+  def generateCode[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, Buf, OUT])(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT], q: Quotes): Expr[OUT] = {
     val decls = optimizedStream.declarations
     println(s"Numero di dichiarazioni: ${decls.size}")
     println(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
 
     optimizedStream.collectionStrategy.collectionStrategy match {
       case ToArray()                               => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, Array[ELEM]]])
+      case Summing()                               => generateSummingAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, ELEM]])(using elemType)
       case WithCollector[ELEM, Buf, OUT](collExpr) => generateGenericAccumulator[ELEM, Buf, OUT](optimizedStream, collExpr)
     }
+  }
+  def generateSummingAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, OUT])(using Quotes): Expr[OUT] = {
+    val (a, b) =
+      Type.of[OUT] match {
+
+        case '[Int] => {
+          val sumSymbol = createVariable[Int]("sum")
+          val sumDef = createDef[Int](sumSymbol, 0)
+
+          val body = Emit.Linear[Int](elem => {
+            val currentSum = Ref(sumSymbol).asExprOf[Int]
+            Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
+          })
+          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Int]]
+
+          val loopBody = buildBody[Int](stream, body, optimizedStream.collectionStrategy.ref)
+          (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
+        }
+        case '[Double] => {
+          val sumSymbol = createVariable[Double]("sum")
+          val sumDef = createDef[Double](sumSymbol, 0)
+
+          val body = Emit.Linear[Double](elem => {
+            val currentSum = Ref(sumSymbol).asExprOf[Double]
+            Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
+          })
+          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Double]]
+
+          val loopBody = buildBody[Double](stream, body, optimizedStream.collectionStrategy.ref)
+          (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
+        }
+        case '[Float] => {
+          val sumSymbol = createVariable[Float]("sum")
+          val sumDef = createDef[Float](sumSymbol, 0)
+
+          val body = Emit.Linear[Float](elem => {
+            val currentSum = Ref(sumSymbol).asExprOf[Float]
+            Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
+          })
+          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Float]]
+
+          val loopBody = buildBody[Float](stream, body, optimizedStream.collectionStrategy.ref)
+          (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
+        }
+        case '[Long] => {
+          val sumSymbol = createVariable[Long]("sum")
+          val sumDef = createDef[Long](sumSymbol, 0)
+
+          val body = Emit.Linear[Long](elem => {
+            val currentSum = Ref(sumSymbol).asExprOf[Long]
+            Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
+          })
+          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Long]]
+
+          val loopBody = buildBody[Long](stream, body, optimizedStream.collectionStrategy.ref)
+          (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
+        }
+
+        case _ => quotes.reflect.report.errorAndAbort(s"Collector.summing is not supported for ${Type.show[OUT]}")
+      }
+
+    Block(optimizedStream.declarations ++ a, b).asExprOf[OUT]
   }
 
   def generateToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, Array[OUT]])(using Quotes): Expr[Array[OUT]] = {
@@ -304,35 +369,36 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR) {
     val list = source.term
     val len = source.sizeRef
     '{
+      if ($list.isInstanceOf[java.util.ArrayList[OUT @unchecked]]) {
+        var i = 0
+        // Estrazione dell'array sottostante per massima performance in accesso
+        val raw = ArrayListAccessor.getRawArray($list.asInstanceOf[java.util.ArrayList[OUT]])
+        while (
+          ${
+            exitCond match {
+              case Some(cond) => '{ i < $len && $cond }
+              case None       => '{ i < $len }
+            }
+          }
+        ) {
+          ${ indexedEmit('{ raw(i).asInstanceOf[OUT]}, '{ i }) }
+          i += 1
+        }
+      } else {
 
-      $list match {
-        case arrayList: java.util.ArrayList[OUT @unchecked] =>
-          var i = 0
-          while (
-            ${
-              exitCond match {
-                case Some(cond) => '{ i < $len && $cond }
-                case None       => '{ i < $len }
-              }
+        val iterator = $list.iterator()
+        var i = 0
+        while (
+          ${
+            exitCond match {
+              case Some(cond) => '{ $cond && iterator.hasNext }
+              case None       => '{ iterator.hasNext }
             }
-          ) {
-            ${ indexedEmit('{ arrayList.get(i) }, '{ i }) }
-            i += 1
           }
-        case _ =>
-          val iterator = $list.iterator()
-          var i = 0
-          while (
-            ${
-              exitCond match {
-                case Some(cond) => '{ $cond && iterator.hasNext }
-                case None       => '{ iterator.hasNext }
-              }
-            }
-          ) {
-            ${ indexedEmit('{ iterator.next() }, '{ i }) }
-            i += 1
-          }
+        ) {
+          ${ indexedEmit('{ iterator.next() }, '{ i }) }
+          i += 1
+        }
       }
     }
   }
@@ -389,4 +455,5 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR) {
     case _: EnrichedFlatMap[?, ?]       => None
     case _                              => None
   }
+
 }

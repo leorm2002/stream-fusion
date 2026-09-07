@@ -17,43 +17,42 @@ class MegamorphicBenchmark {
   private val monoMapper: ToIntFunction[String] = s => s.length
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def javaPipeline(xs: java.util.List[String], mapper: ToIntFunction[String]): Array[Int] =
-    xs.stream().mapToInt(mapper).toArray
+  private def javaPipeline(xs: java.util.List[String], mapper: ToIntFunction[String]): Int =
+    xs.stream().mapToInt(mapper).sum()
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused1(xs: java.util.List[String]): Array[Int] =
-    FusedStream.from(xs).map(_.length).collect(Collector.toArray)
+  private def fused1(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused2(xs: java.util.List[String]): Array[Int] =
-    FusedStream.from(xs).map(_.length).collect(Collector.toArray)
+  private def fused2(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused3(xs: java.util.List[String]): Array[Int] =
-    FusedStream.from(xs).map(_.length).collect(Collector.toArray)
+  private def fused3(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused4(xs: java.util.List[String]): Array[Int] =
-    FusedStream.from(xs).map(_.length).collect(Collector.toArray)
+  private def fused4(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused5(xs: java.util.List[String]): Array[Int] =
-    FusedStream.from(xs).map(_.length).collect(Collector.toArray)
+  private def fused5(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused6(xs: java.util.List[String]): Array[Int] =
-    FusedStream.from(xs).map(_.length).collect(Collector.toArray)
+  private def fused6(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused7(xs: java.util.List[String]): Array[Int] =
-    FusedStream.from(xs).map(_.length).collect(Collector.toArray)
+  private def fused7(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused8(xs: java.util.List[String]): Array[Int] =
-    FusedStream.from(xs).map(_.length).collect(Collector.toArray)
+  private def fused8(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
 
   @Benchmark
   @OperationsPerInvocation(8)
+  // Megamoprhic call site using a different lambda each time
   def javaMegamorphic(state: BenchmarkData, bh: Blackhole): Unit = {
     val xs = state.javaStrings
 
@@ -69,6 +68,7 @@ class MegamorphicBenchmark {
 
 @Benchmark
 @OperationsPerInvocation(8)
+// Monomotphic call site alway reusing a single lambda
 def javaMonomorphic(state: BenchmarkData, bh: Blackhole): Unit = {
   val xs = state.javaStrings
 
@@ -83,6 +83,7 @@ def javaMonomorphic(state: BenchmarkData, bh: Blackhole): Unit = {
 }
   @Benchmark
   @OperationsPerInvocation(8)
+  // This should be close to javaManualIndexed, the megamorphic call site get removed by betareduction
   def fusedMegamorphic(state: BenchmarkData, bh: Blackhole): Unit = {
     val xs = state.javaStrings
 
@@ -100,14 +101,14 @@ def javaMonomorphic(state: BenchmarkData, bh: Blackhole): Unit = {
 def javaManualIndexed(state: BenchmarkData, bh: Blackhole): Unit = {
   val xs = state.javaStrings
   val size = xs.size()
-  val out = new Array[Int](size)
 
   var i = 0
+  var sum = 0;
   while (i < size) {
-    out(i) = xs.get(i).length
+    sum += xs.get(i).length
     i += 1
   }
 
-  bh.consume(out)
+  bh.consume(sum)
 }
 }
