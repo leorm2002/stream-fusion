@@ -1,5 +1,6 @@
 package fuse
 import scala.quoted.*
+import CollectionStrategy.*
 
 final class Optimizer[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes

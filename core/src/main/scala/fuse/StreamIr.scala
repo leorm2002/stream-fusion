@@ -42,18 +42,6 @@ class StreamIr(using val quotes: Quotes) {
   /** Represent a slice operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
   case class Slice[A](upstream: StreamTree[A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A]) extends StreamTree[A] with WithUpstream[A]
 
-  /** Sealed hierarchy with the possible collection mode */
-  sealed trait CollectionStrategy[A, Buf, R]
-
-
-    /** This mode is derived from the opaque toArray collector, it does'nt actually have an associated collector, it instead works directly on an array for maximum performance */
-    final case class ToArray[A]() extends CollectionStrategy[A, ArrayBuilder[A], Array[A]]
-
-    final case class Summing[A]() extends CollectionStrategy[A, Any, A]
-
-    /** This mode is the standard coellection method wich is based on an istance of a collector, may suffer from dynamic dispatch overhead depending by the jit */
-    final case class WithCollector[A, Buf, R](collector: Expr[Collector[A, Buf, R]]) extends CollectionStrategy[A, Buf, R]
-
 
   /** The base AST, abtained by the parsing phase */
   case class Ast[A, Buf, R](parsedStream: StreamTree[A], collectionStrategy: CollectionStrategy[A, Buf, R], prefixStatements: List[Statement])

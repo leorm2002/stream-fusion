@@ -2,6 +2,7 @@ package fuse
 import scala.quoted.*
 import scala.collection.mutable.ArrayBuilder
 import scala.annotation.targetName
+import CollectionStrategy.*
 
 final class Parser[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
