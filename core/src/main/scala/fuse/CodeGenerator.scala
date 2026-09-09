@@ -13,17 +13,13 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
   import ir.quotes.reflect.*
   import ir.StreamTree.*
 
-  // Due modalità di emissione, indicizzata e libera la prima da garanzia di allineamento e permette di usare un solo indice nel loop
-  sealed trait Emit[A]
-
-  object Emit {
-    final case class Indexed[OUT](run: (Expr[OUT], Expr[Int]) => Expr[Unit]) extends Emit[OUT] {
-      inline def apply(elem: Expr[OUT], index: Expr[Int]): Expr[Unit] = run(elem, index)
-    }
-    final case class Linear[OUT](run: Expr[OUT] => Expr[Unit]) extends Emit[OUT] {
-      inline def apply(elem: Expr[OUT]): Expr[Unit] = run(elem)
-    }
-  }
+  // Value emitted during lowering together with optional
+  // positional metadata provided by the current source.
+  type Emit[A] = Emitted[A] => Expr[Unit]
+  final case class Emitted[A](
+      elem: Expr[A],
+      sourceIndex: Option[Expr[Int]]
+  )
 
   def generateCode[ELEM, Buf, OUT](
       optimizedStream: AstExt[ELEM, Buf, OUT]
@@ -53,14 +49,13 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     val sumDef = createDef(sumSymbol, zero)
     // We can't write sumSymbol + elem.asTerm via quoted expression since the union type does not offer a common + operator
     // This is the easier way to implement it: bypass the checker and directly emit to the scala AST
-    val emit = Emit.Linear[T] { elem => Assign(Ref(sumSymbol), Select.overloaded(Ref(sumSymbol), "+", Nil, List(elem.asTerm))).asExprOf[Unit] }
+    val emit: Emit[T] = emitted => Assign(Ref(sumSymbol), Select.overloaded(Ref(sumSymbol), "+", Nil, List(emitted.elem.asTerm))).asExprOf[Unit]
     val loopBody = buildBody[T](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
     Block(optimizedStream.declarations ++ List(sumDef, loopBody.asTerm), Ref(sumSymbol)).asExprOf[T]
   }
 
   def generateToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, Array[OUT]]): Expr[Array[OUT]] = {
     val decls = optimizedStream.declarations
-    // Type.of[OUT] match   TODO: Specializzazione primitivi: evita boxing???
 
     val generated: Expr[Array[OUT]] = optimizedStream.cardinality match {
       // Pipeline 1:1 dimensione esatta, se non abbiamo outputCardinalityUpperBound c'è un errore nel codices
@@ -69,8 +64,8 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
           val array = ${ newArray[OUT](sizeExpr) }
           ${
             // Codice per emissione: assegna all'indice corrente il valore
-            val body = Emit.Indexed[OUT]((elem, srcIndex) => '{ array($srcIndex) = $elem })
-            buildBody[OUT](optimizedStream.enrichedStream, body, optimizedStream.collectionStrategy.ref)
+            val emit: Emit[OUT] = emitted => { '{ array(${ emitted.sourceIndex.get }) = ${ emitted.elem } } }
+            buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
           }
           array
         }
@@ -80,7 +75,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
           val array = ${ newArray[OUT](sizeExpr) }
           var index = 0
           ${
-            val emit = Emit.Linear[OUT] { elem => '{ array(index) = $elem; index += 1 } }
+            val emit: Emit[OUT] = emitted => '{ array(index) = ${ emitted.elem }; index += 1 }
             buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
           }
           array
@@ -92,7 +87,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
           val array = ${ newArray[OUT](sizeExpr) }
           var index = 0
           ${
-            val emit = Emit.Linear[OUT](elem => '{ array(index) = $elem; index += 1 })
+            val emit: Emit[OUT] = emitted => '{ array(index) = ${ emitted.elem }; index += 1 }
             buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
           }
           // Dobbiamo ritornare un sottoinsieme dell'array
@@ -104,10 +99,11 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
       }
       // Dimensione completamente ignota buffer dinamico (TODO: passare a versioni più performanti dell'arraybuffer)
       case Cardinality.Unknown => {
+        // Type.of[OUT] match   TODO: Specializzazione primitivi: evita boxing???
         '{
           val builder = new scala.collection.mutable.ArrayBuffer[OUT]()
           ${
-            val emit = Emit.Linear[OUT](elem => '{ builder.addOne($elem); () })
+            val emit: Emit[OUT] = emitted => '{ builder.addOne(${ emitted.elem }); () }
             buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
           }
           val result = ${ newArray[OUT]('{ builder.size }) }
@@ -144,7 +140,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
       val buf = c.supplier()
       ${
         // Build the loop body with all the push operations. this is always not indexed since it'a generic user defined accumulator
-        val push: Emit[A] = Emit.Linear[A](result => {
+        val push: Emit[A] = result => {
           earlyExitVarOpt match {
             case Some(exitVarRef) =>
               // Construct: keepProducing = false via TASTy Assign AST node
@@ -153,14 +149,14 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
               val setExitFalse = assignStmt.asExprOf[Unit]
 
               '{
-                val done = c.accumulator(buf, $result)
+                val done = c.accumulator(buf, ${ result.elem })
                 if (done) {
                   $setExitFalse
                 }
               }
-            case None => '{ c.accumulator(buf, $result); () }
+            case None => '{ c.accumulator(buf, ${ result.elem }); () }
           }
-        })
+        }
 
         val loopBody = buildBody[A](optimizedStream.enrichedStream, push, earlyExitRef.toList)
 
@@ -192,14 +188,12 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     given Type[IN] = flatMap.inType
     given Type[OUT] = flatMap.outType
 
-    checkForEmitType(emit, "flatMap")
-
-    val flatMapEmit: Emit[IN] = Emit.Linear[IN](elemExpr => {
+    val flatMapEmit: Emit[IN] = emitted => {
       // Cast the symbol to the current quotes instance
       val symbol = flatMap.elemSymbol
 
       // Bind the flatMapVariable to the value received from the previous computation
-      val binderDeclaration = ValDef(symbol, Some(elemExpr.asTerm))
+      val binderDeclaration = ValDef(symbol, Some(emitted.elem.asTerm))
 
       // Generate the body of the flatmap, which emits to the producer
       val flatMapPredicated = flatMap.predicates
@@ -208,17 +202,17 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
       // Wrap in the iteration's local scope: [val outerElem = ..., var limitCounter = 0, <inner loop>]
       val allDeclarations = binderDeclaration :: flatMap.innerDeclarations
       Block(allDeclarations, innerBody.asTerm).asExprOf[Unit]
-    })
+    }
     // Generate the body of the upstream, emitting into the flatmap
     buildBody[IN](flatMap.upstream, flatMapEmit, exitPredicates)
   }
+
   private def buildSlice[OUT](slice: EnrichedSlice[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[OUT] = slice.outType
 
-    val callEmit: Expr[OUT] => Expr[Unit] = checkForEmitType(emit, "slice")
     val counterRef = slice.counterRef
 
-    val upstreamEmit = Emit.Linear[OUT](elem => {
+    val upstreamEmit: Emit[OUT] = emitted => {
       val incrementTerm = Assign(counterRef.asTerm, '{ $counterRef + 1 }.asTerm)
       val incrementExpr = incrementTerm.asExprOf[Unit]
 
@@ -226,17 +220,17 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
         case Some(from) =>
           '{
             if ($counterRef >= $from) {
-              ${ callEmit(elem) }
+              ${ emit(emitted) }
             }
             $incrementExpr
           }
         case None =>
           '{
-            ${ callEmit(elem) }
+            ${ emit(emitted) }
             $incrementExpr
           }
       }
-    })
+    }
 
     buildBody[OUT](slice.upstream, upstreamEmit, earlyExitRef)
   }
@@ -244,7 +238,6 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
   private def buildIterableSource[OUT](source: IterableSource[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[OUT] = source.outType
     val exitCond = foldPredicates(earlyExitRef)
-    val callEmit: Expr[OUT] => Expr[Unit] = checkForEmitType(emit, "Scala iterable")
     '{
       val iterator = ${ source.term }.iterator
       // this get shifted with the match solved
@@ -257,7 +250,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
         }
       ) {
         val elem: OUT = iterator.next()
-        ${ callEmit('elem) }
+        ${ emit(Emitted('elem, None)) }
       }
     }
   }
@@ -280,10 +273,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
         }
       ) {
         ${
-          emit match {
-            case Emit.Indexed(f) => f('{ $arr(i) }, '{ i })
-            case Emit.Linear(f)  => f('{ $arr(i) })
-          }
+          emit(Emitted('{ $arr(i) }, Some('{ i })))
         }
         i += 1
       }
@@ -294,7 +284,6 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     given Type[OUT] = source.outType
     val exitCond = foldPredicates(earlyExitRef)
 
-    val callEmit: Expr[OUT] => Expr[Unit] = checkForEmitType(emit, "Java iterable")
     '{
       val iterator = ${ source.term }.iterator
       while (
@@ -306,7 +295,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
         }
       ) {
         val elem: OUT = iterator.next()
-        ${ callEmit('elem) }
+        ${ emit(Emitted('elem, None)) }
       }
     }
   }
@@ -315,10 +304,6 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
 
     given Type[OUT] = source.outType
     val exitCond = foldPredicates(earlyExitRef)
-    val indexedEmit: (Expr[OUT], Expr[Int]) => Expr[Unit] = emit match {
-      case Emit.Indexed(f) => f
-      case Emit.Linear(f)  => (elem, _) => f(elem)
-    }
 
     val list = source.term
     val len = source.sizeRef
@@ -338,7 +323,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
                   }
                 }
               ) {
-                ${ indexedEmit('{ raw(i).asInstanceOf[OUT] }, '{ i }) }
+                ${ emit(Emitted('{ raw(i).asInstanceOf[OUT] },Some( '{ i }))) }
                 i += 1
               }
 
@@ -354,7 +339,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
                   }
                 }
               ) {
-                ${ indexedEmit('{ $list.get(i).asInstanceOf[OUT] }, '{ i }) }
+                ${ emit(Emitted('{ $list.get(i).asInstanceOf[OUT] }, Some('{ i }))) }
                 i += 1
               }
 
@@ -373,7 +358,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
             }
           }
         ) {
-          ${ indexedEmit('{ iterator.next() }, '{ i }) }
+          ${ emit(Emitted('{ iterator.next() }, Some('{ i }))) }
           i += 1
         }
       }
@@ -383,13 +368,14 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
   private def buildFilter[OUT](filter: Filter[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[OUT] = filter.outType
 
-    val upstreamEmit: Emit[OUT] = Emit.Linear[OUT](elem => {
-      val cond = Expr.betaReduce('{ ${ filter.predicate }($elem) })
-      emit match {
-        case Emit.Linear(f)  => '{ if ($cond) { ${ f(elem) } } }
-        case Emit.Indexed(_) => report.errorAndAbort("Internal error: Filter cannot emit to an Indexed consumer (pipeline should not have aligned indexes)")
+    val upstreamEmit: Emit[OUT] = u => {
+      val cond = Expr.betaReduce('{ ${ filter.predicate }(${ u.elem }) })
+      '{
+        if ($cond) {
+          ${ emit(u) }
+        }
       }
-    })
+    }
 
     buildBody[OUT](filter.upstream, upstreamEmit, earlyExitRef)
   }
@@ -399,28 +385,11 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     given Type[OUT] = map.outType
     println(s"Map function AST: ${map.function.show}")
 
-    val upstreamEmit: Emit[IN] = emit match {
-      case Emit.Indexed(f) =>
-        Emit.Indexed[IN]((elem, idx) => {
-          val mapped = Expr.betaReduce('{ ${ map.function }($elem) })
-          f(mapped, idx)
-        })
-      case Emit.Linear(f) =>
-        Emit.Linear[IN](elem => {
-          val mapped = Expr.betaReduce('{ ${ map.function }($elem) })
-          f(mapped)
-        })
+    val upstreamEmit: Emit[IN] = u => {
+      val mapped = Expr.betaReduce('{ ${ map.function }(${ u.elem }) })
+      emit(Emitted(mapped, u.sourceIndex))
     }
-
     buildBody[IN](map.upstream, upstreamEmit, earlyExitRef)
-  }
-
-  private def checkForEmitType[OUT](emit: Emit[OUT], operator: String): Expr[OUT] => Expr[Unit] = {
-    emit match {
-      case Emit.Indexed(_) => report.errorAndAbort(s"Internal compiler error: $operator cannot emit to an Indexed consumer")
-      case Emit.Linear(f)  => elem => f(elem)
-    }
-
   }
 
 }

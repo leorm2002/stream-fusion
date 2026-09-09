@@ -180,7 +180,7 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
       case IterableSource(term, outType) => (IterableSource[Phase.Enriched, OUT](term, outType), Nil, exitPredicates)
 
       case JIterableSource(term, outType) => (JIterableSource[Phase.Enriched, OUT](term, outType), Nil, exitPredicates)
-      
+
       case source: ArraySource[OUT] =>
         given Type[OUT] = source.outType
         val sourceSymbol = createConstant[Array[OUT]]("source")
@@ -239,42 +239,40 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
 
   /** Verifica ricorsivamente se lo stream conserva una corrispondenza posizionale sorgente e accumulatore
     */
-  private def checkAlignedIndexes(tree: StreamTree[Phase.Enriched,?]): Boolean = {
+  private def checkAlignedIndexes(tree: StreamTree[Phase.Enriched, ?]): Boolean = {
     tree match {
       // Radici supportate con indice 0..len-1 nativo
-      case _: EnrichedJListSource[?]         => true
-      case _: EnrichedArraySource[?]         => true
+      case _: EnrichedJListSource[?] => true
+      case _: EnrichedArraySource[?] => true
 
       // Trasformazione 1:1 che preserva l'indice (propaga a monte)
-      case map: Map[Phase.Enriched,?, ?] => checkAlignedIndexes(map.upstream)
+      case map: Map[Phase.Enriched, ?, ?] => checkAlignedIndexes(map.upstream)
 
       // Operazioni che alterano cardinalità o offset
-      case _: Filter[Phase.Enriched,?]     => false
-      case _: EnrichedSlice[?]      => false
-      case _: EnrichedFlatMap[?, ?] => false
+      case _: Filter[Phase.Enriched, ?] => false
+      case _: EnrichedSlice[?]          => false
+      case _: EnrichedFlatMap[?, ?]     => false
 
       // Radici basate su iteratore (senza indice contiguo)
-      case _: IterableSource[Phase.Enriched,?]  => false
-      case _: JIterableSource[Phase.Enriched,?] => false
+      case _: IterableSource[Phase.Enriched, ?]  => false
+      case _: JIterableSource[Phase.Enriched, ?] => false
     }
   }
 
-  private def hasKnownSourceSize(tree: StreamTree[Phase.Enriched,?]): Cardinality = {
+  private def hasKnownSourceSize(tree: StreamTree[Phase.Enriched, ?]): Cardinality = {
     tree match {
       case source: EnrichedJListSource[?] => Cardinality.Exact(source.sizeRef)
       case source: EnrichedArraySource[?] => Cardinality.Exact(source.sizeRef)
 
-      case _: IterableSource[Phase.Enriched,?]  => Cardinality.Unknown
-      case _: JIterableSource[Phase.Enriched,?] => Cardinality.Unknown
+      case _: IterableSource[Phase.Enriched, ?]  => Cardinality.Unknown
+      case _: JIterableSource[Phase.Enriched, ?] => Cardinality.Unknown
 
-      case map: Map[Phase.Enriched,?, ?]    => hasKnownSourceSize(map.upstream)
-      case filter: Filter[Phase.Enriched,?] => hasKnownSourceSize(filter.upstream).asUpperBound
-      case slice: EnrichedSlice[?]   => hasKnownSourceSize(slice.upstream).asUpperBound
+      case map: Map[Phase.Enriched, ?, ?]    => hasKnownSourceSize(map.upstream)
+      case filter: Filter[Phase.Enriched, ?] => hasKnownSourceSize(filter.upstream).asUpperBound
+      case slice: EnrichedSlice[?]           => hasKnownSourceSize(slice.upstream).asUpperBound
 
       case _: EnrichedFlatMap[?, ?] => Cardinality.Unknown
     }
   }
-
-
 
 }
