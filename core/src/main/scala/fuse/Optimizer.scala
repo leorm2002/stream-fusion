@@ -7,20 +7,21 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
 
   import ir.*
   import ir.quotes.reflect.*
+  import ir.StreamTree.*
 
   def optimize[OUT, Buf, R](ast: ir.Ast[OUT, Buf, R]): AstExt[OUT, Buf, R] = {
 
     // Stream optimization
-    val optimizedStream = optimize(ast.parsedStream)
+    // val optimizedStream = optimize(ast.parsedStream)
 
     // Stream enrichment
     val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
-    val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](optimizedStream, earlyRef.toList)
+    val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](ast.parsedStream, earlyRef.toList)
 
     // Verifica se gli indici di produzione sono 1:1 con quelli della fonte
     val hasAlignedIndexes = checkAlignedIndexes(enrichedStream)
     // Estrae, se è presente, l'esrpressione che definisce l'upper bound della fonte
-    val hasSourceSize = hasKnownSourceSize(ast.parsedStream)
+    val hasSourceSize = hasKnownSourceSize(enrichedStream)
     AstExt(
       enrichedStream,
       ast.prefixStatements ::: declarations ::: exitDeclarations,
@@ -57,39 +58,41 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  def optimize[OUT](parsedStream: StreamTree[OUT]): StreamTree[OUT] = {
-    println(s"[Optimizing Node] => $parsedStream")
+  // def optimize[OUT](parsedStream: StreamTree[Phase.RawOUT]): StreamTree[OUT] = {
+  //   println(s"[Optimizing Node] => $parsedStream")
 
-    parsedStream match {
-      // TODO: change limit and skip to a slice, maybe at parse time
+  //   parsedStream match {
+  //     // TODO: change limit and skip to a slice, maybe at parse time
 
-      // Both limit and skip have no possible optimizations
-      case Slice(upstream, count, count2, outType) => Slice(optimize(upstream), count, count2, outType)
+  //     // Both limit and skip have no possible optimizations
+  //     case Slice(upstream, count, count2, outType) => Slice(optimize(upstream), count, count2, outType)
 
-      case map: Map[in, OUT] => Map[in, OUT](upstream = optimize(map.upstream), function = map.function, inType = map.inType, outType = map.outType)
+  //     case map: Map[in, OUT] => Map[in, OUT](upstream = optimize(map.upstream), function = map.function, inType = map.inType, outType = map.outType)
 
-      case filter: Filter[OUT] => Filter[OUT](upstream = optimize(filter.upstream), predicate = filter.predicate, outType = filter.outType)
+  //     case filter: Filter[OUT] => Filter[OUT](upstream = optimize(filter.upstream), predicate = filter.predicate, outType = filter.outType)
 
-      case flatMap: FlatMap[in, OUT] =>
-        FlatMap(optimize(flatMap.upstream), optimize(flatMap.innerTree), flatMap.inType, flatMap.outType, flatMap.elemSymbol, flatMap.innerDeclarations)
+  //     case flatMap: FlatMap[in, OUT] =>
+  //       FlatMap(optimize(flatMap.upstream), optimize(flatMap.innerTree), flatMap.inType, flatMap.outType, flatMap.elemSymbol, flatMap.innerDeclarations)
 
-      // ========== Root nodes ==========
-      case source: JListSource[in]     => source
-      case source: ArraySource[in]     => source
-      case source: EnrichedJListSource[in]     => source
-      case source: EnrichedArraySource[in]     => source
-      case source: IterableSource[in]  => source // It's the root nodw
-      case source: JIterableSource[in] => source // It's the root nodw
+  //     // ========== Root nodes ==========
+  //     case source: JListSource[in]     => source
+  //     case source: ArraySource[in]     => source
+  //     case source: EnrichedJListSource[in]     => source
+  //     case source: EnrichedArraySource[in]     => source
+  //     case source: IterableSource[in]  => source // It's the root nodw
+  //     case source: JIterableSource[in] => source // It's the root nodw
 
-    }
+  //   }
 
-  }
+  // }
 
   /** Navigate bottom up enriching the components
     *
     * @param parsedStream
     */
-  private def enrich[OUT](parsedStream: StreamTree[OUT], exitPredicates: List[Expr[Boolean]])(using Quotes): (StreamTree[OUT], List[Statement], List[Expr[Boolean]]) = {
+  private def enrich[OUT](parsedStream: StreamTree[Phase.Raw, OUT], exitPredicates: List[Expr[Boolean]])(using
+      Quotes
+  ): (StreamTree[Phase.Enriched, OUT], List[Statement], List[Expr[Boolean]]) = {
 
     // Recursevly enrich upstream (bottom up)
     println(s"[Enriching Node] => $parsedStream")
@@ -131,24 +134,23 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
         (enrichedSlice, upstreamDeclarations ::: fromDeclarations ::: untilDeclarations ::: List(counterDef), outPred)
       }
 
-      case map: Map[in, OUT] => {
+      case map: Map[Phase.Raw, in, OUT] => {
         given Type[in] = map.inType
         given Type[OUT] = map.outType
 
         // Materialize the function, if it's somthing like makeMapper() we create the mapper only once and assign it to a constant
         val (functionRef, functionDeclarations) = materializeFunction[in, OUT]("mapFunction", map.function)
         val (enrichedUpstream, declarations, predicates) = enrich[in](map.upstream, exitPredicates)
-        val enrichedMap = Map[in, OUT](enrichedUpstream, functionRef, map.inType, map.outType)
+        val enrichedMap = Map[Phase.Enriched, in, OUT](enrichedUpstream, functionRef, map.inType, map.outType)
         (enrichedMap, declarations ::: functionDeclarations, predicates)
       }
 
-      case filter: Filter[OUT] => {
-        given Type[OUT] = filter.outType
-
+      case Filter(upstream, predicate, outType) => {
+        given Type[OUT] = outType
         // Materialize the function, if it's somthing like makeFilter() we create the mapper only once and assign it to a constant
-        val (predicateRef, predicateDeclarations) = materializeFunction[OUT, Boolean]("filterPredicate", filter.predicate)
-        val (enrichedUpstream, declarations, predicates) = enrich[OUT](filter.upstream, exitPredicates)
-        val enrichedFilter = Filter[OUT](enrichedUpstream, predicateRef, filter.outType)
+        val (predicateRef, predicateDeclarations) = materializeFunction[OUT, Boolean]("filterPredicate", predicate)
+        val (enrichedUpstream, declarations, predicates) = enrich[OUT](upstream, exitPredicates)
+        val enrichedFilter = Filter[Phase.Enriched, OUT](enrichedUpstream, predicateRef, outType)
         (enrichedFilter, declarations ::: predicateDeclarations, predicates)
       }
 
@@ -175,9 +177,11 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
       }
 
       // ============ Root nodes ============
-      case source: IterableSource[in]  => (source, Nil, exitPredicates) // It's the root nodw
-      case source: JIterableSource[in] => (source, Nil, exitPredicates) // It's the root nodw
-      case source: ArraySource[OUT]    =>
+      case IterableSource(term, outType) => (IterableSource[Phase.Enriched, OUT](term, outType), Nil, exitPredicates)
+
+      case JIterableSource(term, outType) => (JIterableSource[Phase.Enriched, OUT](term, outType), Nil, exitPredicates)
+      
+      case source: ArraySource[OUT] =>
         given Type[OUT] = source.outType
         val sourceSymbol = createConstant[Array[OUT]]("source")
         val sourceRef = Ref(sourceSymbol).asExprOf[Array[OUT]]
@@ -196,15 +200,8 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
         val sizeRef = Ref(sizeSymbol).asExprOf[Int]
         val sizeDef = ValDef(sizeSymbol, Some('{ $sourceRef.size() }.asTerm))
         (EnrichedJListSource[OUT](sourceRef, sizeRef, source.outType), List[Statement](sourceDef, sizeDef), exitPredicates)
-    
-      case source: EnrichedArraySource[OUT] => ???
-
-      case source: EnrichedJListSource[OUT] => ???
-
-    
 
     }
-
 
   }
 
@@ -242,43 +239,39 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
 
   /** Verifica ricorsivamente se lo stream conserva una corrispondenza posizionale sorgente e accumulatore
     */
-  private def checkAlignedIndexes(tree: StreamTree[?]): Boolean = {
+  private def checkAlignedIndexes(tree: StreamTree[Phase.Enriched,?]): Boolean = {
     tree match {
       // Radici supportate con indice 0..len-1 nativo
-      case _: JListSource[?] => true
-      case _: ArraySource[?] => true
-      case _: EnrichedArraySource[?] => true
-      case _: EnrichedJListSource[?] => true
+      case _: EnrichedJListSource[?]         => true
+      case _: EnrichedArraySource[?]         => true
 
       // Trasformazione 1:1 che preserva l'indice (propaga a monte)
-      case map: Map[?, ?] => checkAlignedIndexes(map.upstream)
+      case map: Map[Phase.Enriched,?, ?] => checkAlignedIndexes(map.upstream)
 
       // Operazioni che alterano cardinalità o offset
-      case _: Filter[?]     => false
-      case _: Slice[?]      => false
-      case _: FlatMap[?, ?] => false
+      case _: Filter[Phase.Enriched,?]     => false
+      case _: EnrichedSlice[?]      => false
+      case _: EnrichedFlatMap[?, ?] => false
 
       // Radici basate su iteratore (senza indice contiguo)
-      case _: IterableSource[?]  => false
-      case _: JIterableSource[?] => false
+      case _: IterableSource[Phase.Enriched,?]  => false
+      case _: JIterableSource[Phase.Enriched,?] => false
     }
   }
 
-  private def hasKnownSourceSize(tree: StreamTree[?]): Boolean = {
+  private def hasKnownSourceSize(tree: StreamTree[Phase.Enriched,?]): Boolean = {
     tree match {
-      case _: JListSource[?] => true
-      case _: ArraySource[?] => true
       case _: EnrichedJListSource[?] => true
       case _: EnrichedArraySource[?] => true
 
-      case _: IterableSource[?]  => false
-      case _: JIterableSource[?] => false
+      case _: IterableSource[Phase.Enriched,?]  => false
+      case _: JIterableSource[Phase.Enriched,?] => false
 
-      case map: Map[?, ?]    => hasKnownSourceSize(map.upstream)
-      case filter: Filter[?] => hasKnownSourceSize(filter.upstream)
-      case slice: Slice[?]   => hasKnownSourceSize(slice.upstream)
+      case map: Map[Phase.Enriched,?, ?]    => hasKnownSourceSize(map.upstream)
+      case filter: Filter[Phase.Enriched,?] => hasKnownSourceSize(filter.upstream)
+      case slice: EnrichedSlice[?]   => hasKnownSourceSize(slice.upstream)
 
-      case _: FlatMap[?, ?] => false
+      case _: EnrichedFlatMap[?, ?] => false
     }
   }
 

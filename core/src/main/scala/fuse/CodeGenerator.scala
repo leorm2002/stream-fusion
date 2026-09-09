@@ -11,6 +11,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
 
   import ir.*
   import ir.quotes.reflect.*
+  import ir.StreamTree.*
 
   // Due modalità di emissione, indicizzata e libera la prima da garanzia di allineamento e permette di usare un solo indice nel loop
   sealed trait Emit[A]
@@ -24,7 +25,9 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     }
   }
 
-  def generateCode[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, Buf, OUT])(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT], q: Quotes, compileCfg: CompileConfig): Expr[OUT] = {
+  def generateCode[ELEM, Buf, OUT](
+      optimizedStream: AstExt[ELEM, Buf, OUT]
+  )(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT], q: Quotes, compileCfg: CompileConfig): Expr[OUT] = {
     val decls = optimizedStream.declarations
     println(s"Numero di dichiarazioni: ${decls.size}")
     println(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
@@ -47,7 +50,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
             val currentSum = Ref(sumSymbol).asExprOf[Int]
             Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
           })
-          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Int]]
+          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Phase.Enriched, Int]]
 
           val loopBody = buildBody[Int](stream, body, optimizedStream.collectionStrategy.ref)
           (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
@@ -60,7 +63,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
             val currentSum = Ref(sumSymbol).asExprOf[Double]
             Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
           })
-          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Double]]
+          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Phase.Enriched, Double]]
 
           val loopBody = buildBody[Double](stream, body, optimizedStream.collectionStrategy.ref)
           (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
@@ -73,7 +76,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
             val currentSum = Ref(sumSymbol).asExprOf[Float]
             Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
           })
-          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Float]]
+          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Phase.Enriched, Float]]
 
           val loopBody = buildBody[Float](stream, body, optimizedStream.collectionStrategy.ref)
           (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
@@ -86,7 +89,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
             val currentSum = Ref(sumSymbol).asExprOf[Long]
             Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
           })
-          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Long]]
+          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Phase.Enriched, Long]]
 
           val loopBody = buildBody[Long](stream, body, optimizedStream.collectionStrategy.ref)
           (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
@@ -217,22 +220,16 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
 
   }
 
-  private def buildBody[OUT](tree: StreamTree[OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildBody[OUT](tree: StreamTree[Phase.Enriched, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
     tree match {
-      case source: EnrichedJListSource[OUT]  => buildJListSource(source, emit, exitPredicates)
-      case source: EnrichedArraySource[OUT]  => buildArraySource(source, emit, exitPredicates)
-      case source: JIterableSource[OUT]      => buildJIterableSource(source, emit, exitPredicates)
-      case source: IterableSource[OUT]       => buildIterableSource(source, emit, exitPredicates)
-      case filter: Filter[OUT]               => buildFilter(filter, emit, exitPredicates)
-      case map: Map[?, OUT]                  => buildMap(map, emit, exitPredicates)
-      case slice: EnrichedSlice[OUT]         => buildSlice(slice, emit, exitPredicates)
-      case flatmap: EnrichedFlatMap[in, OUT] => buildFlatMap(flatmap, emit, exitPredicates)
-      // Versioni "base" non devono arrivare qua
-      case source: JListSource[OUT] => report.errorAndAbort("Internal compiler error: non-enriched Slice reached CodeGenerator")
-      case source: ArraySource[OUT] => report.errorAndAbort("Internal compiler error: non-enriched Slice reached CodeGenerator")
-
-      case slice: Slice[OUT]      => report.errorAndAbort("Internal compiler error: non-enriched Slice reached CodeGenerator")
-      case flatMap: FlatMap[_, _] => report.errorAndAbort("Internal compiler error: non-enriched FlatMap reached CodeGenerator")
+      case source: EnrichedJListSource[OUT]             => buildJListSource(source, emit, exitPredicates)
+      case source: EnrichedArraySource[OUT]             => buildArraySource(source, emit, exitPredicates)
+      case source: JIterableSource[Phase.Enriched, OUT] => buildJIterableSource(source, emit, exitPredicates)
+      case source: IterableSource[Phase.Enriched, OUT]  => buildIterableSource(source, emit, exitPredicates)
+      case filter: Filter[Phase.Enriched, OUT]          => buildFilter(filter, emit, exitPredicates)
+      case map: Map[Phase.Enriched, ?, OUT]             => buildMap(map, emit, exitPredicates)
+      case slice: EnrichedSlice[OUT]                    => buildSlice(slice, emit, exitPredicates)
+      case flatmap: EnrichedFlatMap[in, OUT]            => buildFlatMap(flatmap, emit, exitPredicates)
     }
   }
   private def buildFlatMap[IN, OUT](flatMap: EnrichedFlatMap[IN, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
@@ -289,7 +286,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     buildBody[OUT](slice.upstream, upstreamEmit, earlyExitRef)
   }
 
-  private def buildIterableSource[OUT](source: IterableSource[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildIterableSource[OUT](source: IterableSource[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
     given Type[OUT] = source.outType
     val exitCond = foldPredicates(earlyExitRef)
     val callEmit: Expr[OUT] => Expr[Unit] = checkForEmitType(emit, "Scala iterable")
@@ -338,7 +335,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     }
   }
 
-  private def buildJIterableSource[OUT](source: JIterableSource[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildJIterableSource[OUT](source: JIterableSource[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
     given Type[OUT] = source.outType
     val exitCond = foldPredicates(earlyExitRef)
 
@@ -428,7 +425,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     }
   }
 
-  private def buildFilter[OUT](filter: Filter[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildFilter[OUT](filter: Filter[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
     given Type[OUT] = filter.outType
 
     val upstreamEmit: Emit[OUT] = Emit.Linear[OUT](elem => {
@@ -442,7 +439,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     buildBody[OUT](filter.upstream, upstreamEmit, earlyExitRef)
   }
 
-  private def buildMap[IN, OUT](map: Map[IN, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildMap[IN, OUT](map: Map[Phase.Enriched, IN, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
     given Type[IN] = map.inType
     given Type[OUT] = map.outType
     println(s"Map function AST: ${map.function.show}")
@@ -471,14 +468,15 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
 
   }
 
-  private def getSourceSizeRef(tree: StreamTree[?]): Option[Expr[Int]] = tree match {
-    case source: EnrichedArraySource[?] => Some(source.sizeRef)
-    case source: EnrichedJListSource[?] => Some(source.sizeRef)
-    case map: Map[?, ?]                 => getSourceSizeRef(map.upstream)
-    case filter: Filter[?]              => getSourceSizeRef(filter.upstream)
-    case slice: EnrichedSlice[?]        => getSourceSizeRef(slice.upstream)
-    case _: EnrichedFlatMap[?, ?]       => None
-    case _                              => None
+  private def getSourceSizeRef(tree: StreamTree[Phase.Enriched, ?]): Option[Expr[Int]] = tree match {
+    case source: EnrichedArraySource[?]          => Some(source.sizeRef)
+    case source: EnrichedJListSource[?]          => Some(source.sizeRef)
+    case map: Map[Phase.Enriched, ?, ?]          => getSourceSizeRef(map.upstream)
+    case filter: Filter[Phase.Enriched, ?]       => getSourceSizeRef(filter.upstream)
+    case slice: EnrichedSlice[?]                 => getSourceSizeRef(slice.upstream)
+    case fm: EnrichedFlatMap[?, ?]               => None
+    case is: IterableSource[Phase.Enriched, ?]   => None
+    case jis: JIterableSource[Phase.Enriched, ?] => None
   }
 
 }

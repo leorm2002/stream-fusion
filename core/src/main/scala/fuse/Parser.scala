@@ -3,12 +3,11 @@ import scala.quoted.*
 import scala.collection.mutable.ArrayBuilder
 import scala.annotation.targetName
 import CollectionStrategy.*
-
 final class Parser[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
   import ir.*
   import ir.quotes.reflect.*
-
+  import ir.StreamTree.*
   def parseExpression[A: Type, Buf: Type, R: Type](stream: Expr[fuse.Stream[A]], collector: Expr[Collector[A, Buf, R]]): Ast[A, Buf, R] = {
     println("Starting  to parse the stream body")
     println("=== parseTerm ===")
@@ -94,7 +93,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
       case jiter if jiter.derivesFrom(javaIterableSymbol) =>
         jiter.baseType(javaIterableSymbol) match {
           case AppliedType(_, List(elemTpe)) =>
-            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](JIterableSource[elem](term.asExprOf[java.lang.Iterable[elem]], Type.of[elem]), Nil) }
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](JIterableSource[Phase.Raw,elem](term.asExprOf[java.lang.Iterable[elem]], Type.of[elem]), Nil) }
         }
 
       case arr if arr.derivesFrom(arraySymbol) =>
@@ -105,7 +104,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
       case iter if iter.derivesFrom(iterableSymbol) =>
         iter.baseType(iterableSymbol) match {
           case AppliedType(_, List(elemTpe)) =>
-            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](IterableSource[elem](term.asExprOf[Iterable[elem]], Type.of[elem]), Nil) }
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](IterableSource[Phase.Raw,elem](term.asExprOf[Iterable[elem]], Type.of[elem]), Nil) }
         }
       case _ => report.errorAndAbort(s"StreamFusion: from() expected one of Iterable[T]/Array[T], got ${sourceTpr}", term.pos)
     }
@@ -119,7 +118,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
         //  Given the type of the element elem at runtime it will be converted to an iteratorable and enter in the from(iterable<>) flow. this can be optimized
         val singleExpr = item.asExprOf[elem]
         val iterableExpr: Expr[Iterable[elem]] = '{ Iterable.single[elem](${ singleExpr }) }
-        ParsedTreeImpl[elem](IterableSource[elem](iterableExpr, Type.of[elem]), Nil)
+        ParsedTreeImpl[elem](IterableSource[Phase.Raw,elem](iterableExpr, Type.of[elem]), Nil)
     }
   }
 
@@ -129,7 +128,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     given Type[InOut] = upstream.outType
 
     val predicate = predicateTerm.asExprOf[InOut => Boolean]
-    val filter = Filter[InOut](upstream.current, predicate, upstream.outType)
+    val filter = Filter[Phase.Raw,InOut](upstream.current, predicate, upstream.outType)
 
     ParsedTreeImpl[InOut](filter, upstream.declarations)
   }
@@ -214,7 +213,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
       case '[out] =>
         // Cast the function term to an actual Function
         val function = functionTerm.asExprOf[In => out]
-        val map = Map[In, out](upstream.current, function, upstream.outType, Type.of[out])
+        val map = Map[Phase.Raw,In, out](upstream.current, function, upstream.outType, Type.of[out])
         ParsedTreeImpl[out](map, upstream.declarations)
     }
   }
@@ -293,16 +292,16 @@ final class Parser[IR <: AnyIR](val ir: IR) {
   private sealed trait ParsedTree {
     type Out
 
-    val current: StreamTree[Out]
+    val current: StreamTree[Phase.Raw, Out]
     val declarations: List[ir.quotes.reflect.Statement]
     final def outType: Type[Out] = current.outType
 
-    def getCurrent[A](): StreamTree[A] = {
-      current.asInstanceOf[StreamTree[A]]
+    def getCurrent[A](): StreamTree[Phase.Raw,A] = {
+      current.asInstanceOf[StreamTree[Phase.Raw,A]]
     }
   }
 
-  private final case class ParsedTreeImpl[A](current: StreamTree[A], declarations: List[ir.quotes.reflect.Statement]) extends ParsedTree {
+  private final case class ParsedTreeImpl[A](current: StreamTree[Phase.Raw,A], declarations: List[ir.quotes.reflect.Statement]) extends ParsedTree {
     type Out = A
   }
 }

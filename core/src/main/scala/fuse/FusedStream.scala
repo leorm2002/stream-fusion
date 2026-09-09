@@ -107,23 +107,23 @@ object Macro {
   }
 
   def logOptimized[A: Type, Buf: Type, R: Type](arg0: StreamIr#AstExt[A, Buf, R])(using Quotes) = {
-    val ast = exptractAstRepresentation[A, Buf, R](arg0.enrichedStream)
+    val ast = exptractAstRepresentation[A, Buf, R, Phase.Enriched](arg0.enrichedStream)
     println("Optimized AST")
     println(ast)
 
   }
 
   def logParsing[A: Type, Buf: Type, R: Type](arg0: StreamIr#Ast[A, Buf, R])(using Quotes) = {
-    val ast = exptractAstRepresentation[A, Buf, R](arg0.parsedStream)
+    val ast = exptractAstRepresentation[A, Buf, R, Phase.Raw](arg0.parsedStream)
     println("Parsed AST")
     println(ast)
 
   }
 
-  def exptractAstRepresentation[A: Type, Buf: Type, R: Type](parsedStream: StreamIr#StreamTree[A]): String = {
+  def exptractAstRepresentation[A: Type, Buf: Type, R: Type, P <: Phase](parsedStream: StreamIr#StreamTree[P,A]): String = {
 
     parsedStream match {
-      case w: StreamIr#WithUpstream[A] => s"${exptractAstRepresentation[A, Buf, R](w.upstream)} \n\t-${w.getClass()}"
+      case w: StreamIr#WithUpstream[P,A] => s"${exptractAstRepresentation[ A, Buf, R,P](w.upstream)} \n\t-${w.getClass()}"
       case w                           => s"\t-${w.getClass()}"
     }
 

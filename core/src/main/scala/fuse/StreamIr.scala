@@ -8,124 +8,114 @@ import scala.collection.mutable.ArrayBuilder
 // Alias the StreamIr to a type combined with singleton. this will guarantee no problem with path deendant type
 type AnyIR = StreamIr & Singleton
 
+/** This try to represent the tree of a stream after parsing and before generation, it also act as a container for itmes that uses the path dependent quotes making the usage easier
+  * across all the compiler
+  *
+  * @param quotes
+  */
 class StreamIr(using val quotes: Quotes) {
   import quotes.reflect.*
 
-  /** Represents a node of abstract syntax treetree */
-  sealed trait StreamTree[A] {
-    def outType: Type[A]
+  /** Represents the phase of the item of the tree (see Phase-indexed fields in Trees that Grow Simon - Shayan Najd/Peyton Jones)
+    */
+  sealed trait Phase
+  object Phase {
+    sealed trait Raw extends Phase
+    sealed trait Enriched extends Phase
   }
-
-  /** When present indicates that the node has a predecessor, only the root nodes are not WithUpstream */
-  trait WithUpstream[A]() {
-    def upstream: StreamTree[A]
-  }
-
-  /** Represent a (java) List structure used as the source of element for the stream computation */
-  final case class JListSource[A](term: Expr[java.util.List[A]], outType: Type[A]) extends StreamTree[A]
-
-  /** Represent an iterable data structure used as the source of element for the stream computation */
-  final case class IterableSource[A](term: Expr[Iterable[A]], outType: Type[A]) extends StreamTree[A]
-
-  /** Represent a (java) iterable data structure used as the source of element for the stream computation */
-  final case class JIterableSource[A](term: Expr[java.lang.Iterable[A]], outType: Type[A]) extends StreamTree[A]
-
-  /** Represent an array structure used as the source of element for the stream computation */
-  final case class ArraySource[A](term: Expr[Array[A]], outType: Type[A]) extends StreamTree[A]
-
-  /** Represent a filter operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
-  final case class Filter[A](upstream: StreamTree[A], predicate: Expr[A => Boolean], outType: Type[A]) extends StreamTree[A] with WithUpstream[A]
-
-  /** Represents a map operation X -> T and one to one cardinality */
-  final case class Map[A, B](upstream: StreamTree[A], function: Expr[A => B], inType: Type[A], outType: Type[B]) extends StreamTree[B] with WithUpstream[A]
-
-  /** Represent a slice operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
-  case class Slice[A](upstream: StreamTree[A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A]) extends StreamTree[A] with WithUpstream[A]
-
 
   /** The base AST, abtained by the parsing phase */
-  case class Ast[A, Buf, R](parsedStream: StreamTree[A], collectionStrategy: CollectionStrategy[A, Buf, R], prefixStatements: List[Statement])
-
-  /** A flat map operation
-    *
-    * @param upstream
-    *   the stepd who precedes the flat map operation
-    * @param innerTree
-    *   the stream tree "contained" by the flatmap which will end up injected in parent loop
-    * @param inType
-    *   that type of element flowing into
-    * @param outType
-    *   that type of element flowing out
-    * @param elemSymbol
-    *   this is a variable generated at compile time, it binds the input of the inner stream without having access to the actual result of the previous step, see the code
-    *   generation phase to see how it work
-    * @param innerDeclarations
-    *   the inner stream mey need to declare variables for operations like limit/skip, this will be injected in the flatmap loop condition
-    */
-  case class FlatMap[A, B](
-      upstream: StreamTree[A],
-      innerTree: StreamTree[B],
-      inType: Type[A],
-      outType: Type[B],
-      elemSymbol: Symbol,
-      innerDeclarations: List[Statement]
-  ) extends StreamTree[B]
-      with WithUpstream[A]
-
-// ========================================================================================================================================================================
-// ==============================================================    Enriched versions   ==================================================================================
-// ========================================================================================================================================================================
+  case class Ast[A, Buf, R](parsedStream: StreamTree[Phase.Raw, A], collectionStrategy: CollectionStrategy[A, Buf, R], prefixStatements: List[Statement])
 
   /** Represents parsed optimized and enriched stream
     */
   case class AstExt[A, Buf, R](
-      val enrichedStream: StreamTree[A],
+      val enrichedStream: StreamTree[Phase.Enriched, A],
       val declarations: List[Statement],
       val collectionStrategy: EnrichedCollectionStrategy[A, Buf, R],
       val hasAlignedIndexes: Boolean,
       val hasKnownSourceSize: Boolean
   )
 
-  /** Represents a limit operation
-    *
-    * @param upstream
-    *   nodes of the streams who preceed the skip
-    * @param count
-    *   number of elements to skip
-    * @param until
-    *   number of elements to limit
-    * @param outType
-    *   output type of the skip (it's the same as the input)
-    * @param counterRef
-    *   reference the boolean variable dynamically created at compile time which singal to stop take elements
-    */
-  class EnrichedSlice[A](upstream: StreamTree[A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A], val counterRef: Expr[Int])
-      extends Slice[A](upstream, from, until, outType)
+  /** When present indicates that the node has a predecessor, only the root nodes are not WithUpstream */
+  trait WithUpstream[P <: Phase, A] {
+    def upstream: StreamTree[P, A]
+  }
 
-  /** Represents a collector enriched with:
-    * @param earlyExitVar
-    *   the (optional) that signals when the collector has enough elements (es. findFirst collector)
-    * @param ref
-    *   eventual other vairable wich may be added to signal to exti (es. a limit clause)
-    */
-  case class EnrichedCollectionStrategy[A, Buf, R](collectionStrategy: CollectionStrategy[A, Buf, R], earlyExitVar: Option[Expr[Boolean]], ref: List[Expr[Boolean]])
+  /** Represents a node of abstract syntax treetree */
+  enum StreamTree[P <: Phase, A] {
+    def outType: Type[A]
 
-  final case class EnrichedJListSource[A](term: Expr[java.util.List[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[A]
+    /** Represent a (java) List structure used as the source of element for the stream computation */
+    case JListSource[A](term: Expr[java.util.List[A]], outType: Type[A]) extends StreamTree[Phase.Raw, A]
 
-  final case class EnrichedArraySource[A](term: Expr[Array[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[A]
+    case EnrichedJListSource[A](term: Expr[java.util.List[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[Phase.Enriched, A]
 
-  /** Represents a flatMap enriched with the list of predicates injected from the outer stream and extracted from the inner one
-    */
-  class EnrichedFlatMap[A, B](
-      upstream: StreamTree[A],
-      innerTree: StreamTree[B], // AST dell'inner stream già arricchito
-      inType: Type[A],
-      outType: Type[B],
-      elemSymbol: Symbol,
-      innerDeclarations: List[Statement],
-      val predicates: List[Expr[Boolean]]
-  ) extends FlatMap[A, B](upstream, innerTree, inType, outType, elemSymbol, innerDeclarations)
+      /** Represent an array structure used as the source of element for the stream computation */
+    case ArraySource[A](term: Expr[Array[A]], outType: Type[A]) extends StreamTree[Phase.Raw, A]
 
+    case EnrichedArraySource[A](term: Expr[Array[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[Phase.Enriched, A]
+
+      /** Represent an iterable data structure used as the source of element for the stream computation */
+    case IterableSource[P <: Phase, A](term: Expr[Iterable[A]], outType: Type[A]) extends StreamTree[P, A]
+
+    /** Represent a (java) iterable data structure used as the source of element for the stream computation */
+    case JIterableSource[P <: Phase, A](term: Expr[java.lang.Iterable[A]], outType: Type[A]) extends StreamTree[P, A]
+
+    /** Represent a filter operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
+    case Filter[P <: Phase, A](upstream: StreamTree[P, A], predicate: Expr[A => Boolean], outType: Type[A]) extends StreamTree[P, A] with WithUpstream[P, A]
+
+    /** Represents a map operation X -> T and one to one cardinality */
+    case Map[P <: Phase, A, B](upstream: StreamTree[P, A], function: Expr[A => B], inType: Type[A], outType: Type[B]) extends StreamTree[P, B] with WithUpstream[P, A]
+
+    /** Represent a slice operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
+    case Slice[A](upstream: StreamTree[Phase.Raw, A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A])
+        extends StreamTree[Phase.Raw, A]
+        with WithUpstream[Phase.Raw, A]
+
+    case EnrichedSlice[A](upstream: StreamTree[Phase.Enriched, A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A], val counterRef: Expr[Int])
+        extends StreamTree[Phase.Enriched, A]
+        with WithUpstream[Phase.Enriched, A]
+
+    /** A flat map operation
+      *
+      * @param upstream
+      *   the stepd who precedes the flat map operation
+      * @param innerTree
+      *   the stream tree "contained" by the flatmap which will end up injected in parent loop
+      * @param inType
+      *   that type of element flowing into
+      * @param outType
+      *   that type of element flowing out
+      * @param elemSymbol
+      *   this is a variable generated at compile time, it binds the input of the inner stream without having access to the actual result of the previous step, see the code
+      *   generation phase to see how it work
+      * @param innerDeclarations
+      *   the inner stream mey need to declare variables for operations like limit/skip, this will be injected in the flatmap loop condition
+      */
+    case FlatMap[A, B](
+        upstream: StreamTree[Phase.Raw, A],
+        innerTree: StreamTree[Phase.Raw, B],
+        inType: Type[A],
+        outType: Type[B],
+        elemSymbol: Symbol,
+        innerDeclarations: List[Statement]
+    ) extends StreamTree[Phase.Raw, B] with WithUpstream[Phase.Raw, A]
+
+    /** Represents a flatMap enriched with the list of predicates injected from the outer stream and extracted from the inner one
+      */
+    case EnrichedFlatMap[A, B](
+        upstream: StreamTree[Phase.Enriched, A],
+        innerTree: StreamTree[Phase.Enriched, B], // AST dell'inner stream già arricchito
+        inType: Type[A],
+        outType: Type[B],
+        elemSymbol: Symbol,
+        innerDeclarations: List[Statement],
+        val predicates: List[Expr[Boolean]]
+    ) extends StreamTree[Phase.Enriched, B] with WithUpstream[Phase.Enriched, A]
+  }
+
+  /** These are used in all the phases of the compiler, here to simplify invocation */
   def createDef[T](symbol: Symbol, value: Int) = {
     ValDef(symbol, Some(Literal(IntConstant(value))))
   }

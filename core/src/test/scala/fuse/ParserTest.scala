@@ -30,28 +30,28 @@ class ParserTest extends FunSuite {
       // 2. Chiamata al Parser
       val astResult = parser.parseExpression[String, List[String], List[String]](mockStreamExpr, mockCollector)
 
-      def getPrevious(arg0: parser.ir.StreamTree[?]) = {
+      def getPrevious(arg0: parser.ir.StreamTree[?,?]) = {
         arg0 match {
-          case p: parser.ir.WithUpstream[?] => p.upstream
+          case p: parser.ir.WithUpstream[?,?] => p.upstream
           case _                            => null
         }
       }
       assert(astResult != null)
 
       // Map
-      assertEquals(astResult.parsedStream.getClass().getName(), "fuse.StreamIr$Map")
+      assertEquals(astResult.parsedStream.getClass().getName(), "fuse.StreamIr$StreamTree$Map")
 
       // Map
       var prev = getPrevious(astResult.parsedStream)
-      assertEquals(prev.getClass().getName(), "fuse.StreamIr$Map")
+      assertEquals(prev.getClass().getName(), "fuse.StreamIr$StreamTree$Map")
 
       // Filter
       prev = getPrevious(prev)
-      assertEquals(prev.getClass().getName(), "fuse.StreamIr$Filter")
+      assertEquals(prev.getClass().getName(), "fuse.StreamIr$StreamTree$Filter")
 
       // Map
       prev = getPrevious(prev)
-      assertEquals(prev.getClass().getName(), "fuse.StreamIr$Map")
+      assertEquals(prev.getClass().getName(), "fuse.StreamIr$StreamTree$Map")
     }
   }
 
