@@ -3,8 +3,10 @@ package fuse
 import scala.quoted.*
 import fuse.FusedStream.*
 import java.util.ArrayList
+import scala.concurrent.ExecutionContext.Implicits.global
+import CollectionStrategy.*
 
-final class CodeGenerator[IR <: AnyIR](val ir: IR) {
+final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig) {
   private given macroQuotes: ir.quotes.type = ir.quotes
 
   import ir.*
@@ -22,7 +24,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  def generateCode[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, Buf, OUT])(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT], q: Quotes): Expr[OUT] = {
+  def generateCode[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, Buf, OUT])(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT], q: Quotes, compileCfg: CompileConfig): Expr[OUT] = {
     val decls = optimizedStream.declarations
     println(s"Numero di dichiarazioni: ${decls.size}")
     println(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
@@ -372,17 +374,40 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR) {
       if ($list.isInstanceOf[java.util.ArrayList[OUT @unchecked]]) {
         var i = 0
         // Estrazione dell'array sottostante per massima performance in accesso
-        val raw = ArrayListAccessor.getRawArray($list.asInstanceOf[java.util.ArrayList[OUT]])
-        while (
-          ${
-            exitCond match {
-              case Some(cond) => '{ i < $len && $cond }
-              case None       => '{ i < $len }
+        ${
+          if (compileCfg.useUnsafe) {
+            '{
+              val raw = ArrayListAccessor.getRawArray($list.asInstanceOf[java.util.ArrayList[OUT]])
+              while (
+                ${
+                  exitCond match {
+                    case Some(cond) => '{ i < $len && $cond }
+                    case None       => '{ i < $len }
+                  }
+                }
+              ) {
+                ${ indexedEmit('{ raw(i).asInstanceOf[OUT] }, '{ i }) }
+                i += 1
+              }
+
+            }
+
+          } else {
+            '{
+              while (
+                ${
+                  exitCond match {
+                    case Some(cond) => '{ i < $len && $cond }
+                    case None       => '{ i < $len }
+                  }
+                }
+              ) {
+                ${ indexedEmit('{ $list.get(i).asInstanceOf[OUT] }, '{ i }) }
+                i += 1
+              }
+
             }
           }
-        ) {
-          ${ indexedEmit('{ raw(i).asInstanceOf[OUT]}, '{ i }) }
-          i += 1
         }
       } else {
 

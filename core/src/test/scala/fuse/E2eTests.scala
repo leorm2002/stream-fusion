@@ -2,7 +2,10 @@ package fuse
 import munit.FunSuite
 import fuse.{FusedStream, Collector}
 import FusedStream.*
+import RuntimeConfig.*
 import scala.annotation.static
+import scala.concurrent.ExecutionContext.Implicits.global
+
 
 object E2eTests {
   @static

@@ -2,6 +2,7 @@ package runner
 
 import fuse.{FusedStream, Collector}
 import FusedStream.*
+import scala.concurrent.ExecutionContext.Implicits.global
 
 @main def hello(): Unit = {
   val i = 10

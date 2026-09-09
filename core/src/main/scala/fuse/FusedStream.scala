@@ -5,6 +5,7 @@ import scala.collection.mutable.ListBuffer
 import scala.reflect.ClassTag
 import scala.collection.mutable.ArrayBuilder
 import scala.annotation.compileTimeOnly
+import scala.concurrent.ExecutionContext
 
 // Represents the possible operations on the stream
 sealed trait Stream[A] {
@@ -72,8 +73,8 @@ object FusedStream {
 
     /** This is the terminal operator which will trigger the collection of the elements, a custom collector may be defined by the user
       */
-    inline def collect[Buf, R](inline collector: Collector[A, Buf, R]): R = ${
-      Macro.collectImpl[A, Buf, R]('self, 'collector)
+    inline def collect[Buf, R](inline collector: Collector[A, Buf, R])(using inline compileCfg: CompileConfig, runCfg: RuntimeConfig): R = ${
+      Macro.collectImpl[A, Buf, R]('self, 'collector, 'compileCfg, 'runCfg)
     }
   }
 
@@ -81,7 +82,9 @@ object FusedStream {
 
 // --- Macro implementation ---
 object Macro {
-  def collectImpl[A: Type, Buf: Type, R: Type](stream: Expr[Stream[A]], terminal: Expr[Collector[A, Buf, R]])(using q: Quotes): Expr[R] = {
+  def collectImpl[A: Type, Buf: Type, R: Type](stream: Expr[Stream[A]], terminal: Expr[Collector[A, Buf, R]], compileCfgExpr: Expr[CompileConfig], runCfg: Expr[RuntimeConfig])(using q: Quotes): Expr[R] = {
+
+    val compileCfg =compileCfgExpr.valueOrAbort
 
     // The intermediate representation is istantiated in a class, to handle the Quotes istance being path dependand
     // the ir will passed to every step of the transpiler which will use it's quotes istnace as it's own
@@ -96,7 +99,7 @@ object Macro {
     // logOptimized(optimized)
 
     // Given the sequence of operation generate the code
-    val res = CodeGenerator(ir).generateCode(optimized)
+    val res = CodeGenerator(ir, compileCfg).generateCode(optimized)
     println(s"=== FUSED STREAM GENERATED ===")
     println(res.show)
     println(s"==============================")
