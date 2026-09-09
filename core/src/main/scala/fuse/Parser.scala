@@ -228,7 +228,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     val toArraySymbol = TypeRepr.of[Collector.ToArrayCollector[Any]].typeSymbol
     val isTheOpaqueToArray = dealiasedTpe.typeSymbol == toArraySymbol
 
-    val summingSymbol = TypeRepr.of[Collector.SummingCollector[Any]].typeSymbol
+    val summingSymbol = TypeRepr.of[Collector.SummingCollector[Nothing]].typeSymbol
     val isTheOpaqueSumming = dealiasedTpe.typeSymbol == summingSymbol
 
     println(
@@ -251,7 +251,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
       ToArray[A]().asInstanceOf[CollectionStrategy[A, Buf, R]]
     } else if (isTheOpaqueSumming) {
       println(" --> is a specialized sum")
-      Summing[A]().asInstanceOf[CollectionStrategy[A, Buf, R]]
+      Summing[A & Summable]().asInstanceOf[CollectionStrategy[A, Buf, R]]
     } else {
       println(" --> is a generic collector")
       WithCollector[A, Buf, R](collector)

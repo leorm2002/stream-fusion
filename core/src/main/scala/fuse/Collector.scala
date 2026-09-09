@@ -6,6 +6,9 @@ import scala.collection.mutable.ListBuffer
 import fuse.Collector.toList
 import fuse.Collector.findFirst
 import java.util.LinkedList
+
+type Summable = Int | Long | Float | Double
+
 // --- Collector (like Java's Collector<T, A, R>) ---
 trait Collector[ELEM, Buf, RET] {
   def supplier(count: Int): Buf = supplier()
@@ -53,9 +56,9 @@ object Collector {
   @compileTimeOnly("Collector.toArray can only be used as a FusedStream terminal collector")
   def toArray[T]: ToArrayCollector[T] = null.asInstanceOf[ToArrayCollector[T]]
 
-  opaque type SummingCollector[T] <: Collector[T, Any, T] = Collector[T, Any, T]
+  opaque type SummingCollector[T <: Summable] <: Collector[T, Any, T] = Collector[T, Any, T]
   @compileTimeOnly("Collector.summing can only be used as a FusedStream terminal collector")
-  def summing[T]: SummingCollector[T] = null.asInstanceOf[SummingCollector[T]]
+  def summing[T <: Summable]: SummingCollector[T] = null.asInstanceOf[SummingCollector[T]]
 
 
 // Compiler specialized buffer

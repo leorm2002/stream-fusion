@@ -21,13 +21,13 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
     // Verifica se gli indici di produzione sono 1:1 con quelli della fonte
     val hasAlignedIndexes = checkAlignedIndexes(enrichedStream)
     // Estrae, se è presente, l'esrpressione che definisce l'upper bound della fonte
-    val hasSourceSize = hasKnownSourceSize(enrichedStream)
+    val cardinality = hasKnownSourceSize(enrichedStream)
     AstExt(
       enrichedStream,
       ast.prefixStatements ::: declarations ::: exitDeclarations,
       EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs),
       hasAlignedIndexes,
-      hasSourceSize
+      cardinality
     )
   }
 
@@ -259,20 +259,22 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  private def hasKnownSourceSize(tree: StreamTree[Phase.Enriched,?]): Boolean = {
+  private def hasKnownSourceSize(tree: StreamTree[Phase.Enriched,?]): Cardinality = {
     tree match {
-      case _: EnrichedJListSource[?] => true
-      case _: EnrichedArraySource[?] => true
+      case source: EnrichedJListSource[?] => Cardinality.Exact(source.sizeRef)
+      case source: EnrichedArraySource[?] => Cardinality.Exact(source.sizeRef)
 
-      case _: IterableSource[Phase.Enriched,?]  => false
-      case _: JIterableSource[Phase.Enriched,?] => false
+      case _: IterableSource[Phase.Enriched,?]  => Cardinality.Unknown
+      case _: JIterableSource[Phase.Enriched,?] => Cardinality.Unknown
 
       case map: Map[Phase.Enriched,?, ?]    => hasKnownSourceSize(map.upstream)
-      case filter: Filter[Phase.Enriched,?] => hasKnownSourceSize(filter.upstream)
-      case slice: EnrichedSlice[?]   => hasKnownSourceSize(slice.upstream)
+      case filter: Filter[Phase.Enriched,?] => hasKnownSourceSize(filter.upstream).asUpperBound
+      case slice: EnrichedSlice[?]   => hasKnownSourceSize(slice.upstream).asUpperBound
 
-      case _: EnrichedFlatMap[?, ?] => false
+      case _: EnrichedFlatMap[?, ?] => Cardinality.Unknown
     }
   }
+
+
 
 }

@@ -4,9 +4,19 @@ import scala.quoted.Quotes
 import scala.quoted.Expr
 import scala.quoted.Type
 import scala.collection.mutable.ArrayBuilder
+import javax.smartcardio.Card
+import scala.annotation.elidable
 
 // Alias the StreamIr to a type combined with singleton. this will guarantee no problem with path deendant type
 type AnyIR = StreamIr & Singleton
+
+/** Represents the phase of the item of the tree (see Phase-indexed fields in Trees that Grow Simon - Shayan Najd/Peyton Jones)
+  */
+sealed trait Phase
+object Phase {
+  sealed trait Raw extends Phase
+  sealed trait Enriched extends Phase
+}
 
 /** This try to represent the tree of a stream after parsing and before generation, it also act as a container for itmes that uses the path dependent quotes making the usage easier
   * across all the compiler
@@ -16,12 +26,18 @@ type AnyIR = StreamIr & Singleton
 class StreamIr(using val quotes: Quotes) {
   import quotes.reflect.*
 
-  /** Represents the phase of the item of the tree (see Phase-indexed fields in Trees that Grow Simon - Shayan Najd/Peyton Jones)
-    */
-  sealed trait Phase
-  object Phase {
-    sealed trait Raw extends Phase
-    sealed trait Enriched extends Phase
+  enum Cardinality {
+    case Exact(size: Expr[Int])
+    case UpperBound(size: Expr[Int])
+    case Unknown
+  }
+
+  extension (c: Cardinality) {
+    def asUpperBound: Cardinality = c match {
+      case Cardinality.Exact(size)    => Cardinality.UpperBound(size)
+      case ub: Cardinality.UpperBound => ub
+      case Cardinality.Unknown        => Cardinality.Unknown
+    }
   }
 
   /** The base AST, abtained by the parsing phase */
@@ -34,7 +50,7 @@ class StreamIr(using val quotes: Quotes) {
       val declarations: List[Statement],
       val collectionStrategy: EnrichedCollectionStrategy[A, Buf, R],
       val hasAlignedIndexes: Boolean,
-      val hasKnownSourceSize: Boolean
+      val cardinality: Cardinality
   )
 
   /** When present indicates that the node has a predecessor, only the root nodes are not WithUpstream */
@@ -51,12 +67,12 @@ class StreamIr(using val quotes: Quotes) {
 
     case EnrichedJListSource[A](term: Expr[java.util.List[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[Phase.Enriched, A]
 
-      /** Represent an array structure used as the source of element for the stream computation */
+    /** Represent an array structure used as the source of element for the stream computation */
     case ArraySource[A](term: Expr[Array[A]], outType: Type[A]) extends StreamTree[Phase.Raw, A]
 
     case EnrichedArraySource[A](term: Expr[Array[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[Phase.Enriched, A]
 
-      /** Represent an iterable data structure used as the source of element for the stream computation */
+    /** Represent an iterable data structure used as the source of element for the stream computation */
     case IterableSource[P <: Phase, A](term: Expr[Iterable[A]], outType: Type[A]) extends StreamTree[P, A]
 
     /** Represent a (java) iterable data structure used as the source of element for the stream computation */
@@ -116,11 +132,19 @@ class StreamIr(using val quotes: Quotes) {
   }
 
   /** These are used in all the phases of the compiler, here to simplify invocation */
-  def createDef[T](symbol: Symbol, value: Int) = {
-    ValDef(symbol, Some(Literal(IntConstant(value))))
-  }
-  def createDef[T](symbol: Symbol, value: Boolean) = {
-    ValDef(symbol, Some(Literal(BooleanConstant(value))))
+  // In StreamIr:
+
+  type Accepted = Int | Long | Float | Double | Boolean
+
+  def createDef(symbol: Symbol, value: Accepted): ValDef = {
+    val const = value match {
+      case i: Int     => IntConstant(i)
+      case l: Long    => LongConstant(l)
+      case f: Float   => FloatConstant(f)
+      case d: Double  => DoubleConstant(d)
+      case b: Boolean => BooleanConstant(b)
+    }
+    ValDef(symbol, Some(Literal(const)))
   }
 
   def createConstant[T: Type](name: String) = {

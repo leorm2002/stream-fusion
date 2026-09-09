@@ -27,137 +27,92 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
 
   def generateCode[ELEM, Buf, OUT](
       optimizedStream: AstExt[ELEM, Buf, OUT]
-  )(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT], q: Quotes, compileCfg: CompileConfig): Expr[OUT] = {
+  )(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT], compileCfg: CompileConfig): Expr[OUT] = {
     val decls = optimizedStream.declarations
     println(s"Numero di dichiarazioni: ${decls.size}")
     println(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
 
     optimizedStream.collectionStrategy.collectionStrategy match {
       case ToArray()                               => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, Array[ELEM]]])
-      case Summing()                               => generateSummingAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, ELEM]])(using elemType)
+      case _: Summing[t]                           => generateSummingAccumulator[t](optimizedStream.asInstanceOf[AstExt[t, Nothing, t]])(using elemType.asInstanceOf[Type[t]])
       case WithCollector[ELEM, Buf, OUT](collExpr) => generateGenericAccumulator[ELEM, Buf, OUT](optimizedStream, collExpr)
     }
   }
-  def generateSummingAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, OUT])(using Quotes): Expr[OUT] = {
-    val (a, b) =
-      Type.of[OUT] match {
 
-        case '[Int] => {
-          val sumSymbol = createVariable[Int]("sum")
-          val sumDef = createDef[Int](sumSymbol, 0)
-
-          val body = Emit.Linear[Int](elem => {
-            val currentSum = Ref(sumSymbol).asExprOf[Int]
-            Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
-          })
-          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Phase.Enriched, Int]]
-
-          val loopBody = buildBody[Int](stream, body, optimizedStream.collectionStrategy.ref)
-          (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
-        }
-        case '[Double] => {
-          val sumSymbol = createVariable[Double]("sum")
-          val sumDef = createDef[Double](sumSymbol, 0)
-
-          val body = Emit.Linear[Double](elem => {
-            val currentSum = Ref(sumSymbol).asExprOf[Double]
-            Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
-          })
-          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Phase.Enriched, Double]]
-
-          val loopBody = buildBody[Double](stream, body, optimizedStream.collectionStrategy.ref)
-          (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
-        }
-        case '[Float] => {
-          val sumSymbol = createVariable[Float]("sum")
-          val sumDef = createDef[Float](sumSymbol, 0)
-
-          val body = Emit.Linear[Float](elem => {
-            val currentSum = Ref(sumSymbol).asExprOf[Float]
-            Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
-          })
-          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Phase.Enriched, Float]]
-
-          val loopBody = buildBody[Float](stream, body, optimizedStream.collectionStrategy.ref)
-          (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
-        }
-        case '[Long] => {
-          val sumSymbol = createVariable[Long]("sum")
-          val sumDef = createDef[Long](sumSymbol, 0)
-
-          val body = Emit.Linear[Long](elem => {
-            val currentSum = Ref(sumSymbol).asExprOf[Long]
-            Assign(Ref(sumSymbol), '{ $currentSum + $elem }.asTerm).asExprOf[Unit]
-          })
-          val stream = optimizedStream.enrichedStream.asInstanceOf[StreamTree[Phase.Enriched, Long]]
-
-          val loopBody = buildBody[Long](stream, body, optimizedStream.collectionStrategy.ref)
-          (List(sumDef, loopBody.asTerm), Ref(sumSymbol))
-        }
-
-        case _ => quotes.reflect.report.errorAndAbort(s"Collector.summing is not supported for ${Type.show[OUT]}")
-      }
-
-    Block(optimizedStream.declarations ++ a, b).asExprOf[OUT]
+  def generateSummingAccumulator[OUT <: Summable: Type](optimizedStream: AstExt[OUT, ?, OUT]): Expr[OUT] = {
+    Type.of[OUT] match {
+      case '[Int]    => buildSum[Int](optimizedStream.asInstanceOf[AstExt[Int, ?, Int]], 0).asExprOf[OUT]
+      case '[Double] => buildSum[Double](optimizedStream.asInstanceOf[AstExt[Double, ?, Double]], 0d).asExprOf[OUT]
+      case '[Float]  => buildSum[Float](optimizedStream.asInstanceOf[AstExt[Float, ?, Float]], 0f).asExprOf[OUT]
+      case '[Long]   => buildSum[Long](optimizedStream.asInstanceOf[AstExt[Long, ?, Long]], 0L).asExprOf[OUT]
+    }
   }
 
-  def generateToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, Array[OUT]])(using Quotes): Expr[Array[OUT]] = {
-    val hasAlignedIndexes: Boolean = optimizedStream.hasAlignedIndexes
-    val sizeRef = getSourceSizeRef(optimizedStream.enrichedStream)
+  private def buildSum[T <: Summable: Type](optimizedStream: AstExt[T, ?, T], zero: Summable): Expr[T] = {
+    val sumSymbol = createVariable[T]("sum")
+    val sumDef = createDef(sumSymbol, zero)
+    // We can't write sumSymbol + elem.asTerm via quoted expression since the union type does not offer a common + operator
+    // This is the easier way to implement it: bypass the checker and directly emit to the scala AST
+    val emit = Emit.Linear[T] { elem => Assign(Ref(sumSymbol), Select.overloaded(Ref(sumSymbol), "+", Nil, List(elem.asTerm))).asExprOf[Unit] }
+    val loopBody = buildBody[T](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
+    Block(optimizedStream.declarations ++ List(sumDef, loopBody.asTerm), Ref(sumSymbol)).asExprOf[T]
+  }
+
+  def generateToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, Array[OUT]]): Expr[Array[OUT]] = {
     val decls = optimizedStream.declarations
-    val hasEarlyExit = optimizedStream.collectionStrategy.ref.nonEmpty
-    val generated: Expr[Array[OUT]] = Type.of[OUT] match {
-      // TODO: Specializzazione primitivi: evita boxing???
-      case _ => {
-        if (hasAlignedIndexes && !hasEarlyExit) {
-          // Pipeline 1:1 dimensione esatta, se non abbiamo outputCardinalityUpperBound c'è un errore nel codices
-          val sizeExpr: Expr[Int] = sizeRef.getOrElse(report.errorAndAbort("Internal error: aligned indexes require a known source size"))
+    // Type.of[OUT] match   TODO: Specializzazione primitivi: evita boxing???
 
-          '{
-            val array = ${ newArray[OUT](sizeExpr) }
-            ${
-              // Codice per emissione: assegna all'indice corrente il valore
-              val body = Emit.Indexed[OUT]((elem, srcIndex) => '{ array($srcIndex) = $elem })
-              buildBody[OUT](optimizedStream.enrichedStream, body, optimizedStream.collectionStrategy.ref)
-            }
-
+    val generated: Expr[Array[OUT]] = optimizedStream.cardinality match {
+      // Pipeline 1:1 dimensione esatta, se non abbiamo outputCardinalityUpperBound c'è un errore nel codices
+      case Cardinality.Exact(sizeExpr) if optimizedStream.hasAlignedIndexes => {
+        '{
+          val array = ${ newArray[OUT](sizeExpr) }
+          ${
+            // Codice per emissione: assegna all'indice corrente il valore
+            val body = Emit.Indexed[OUT]((elem, srcIndex) => '{ array($srcIndex) = $elem })
+            buildBody[OUT](optimizedStream.enrichedStream, body, optimizedStream.collectionStrategy.ref)
+          }
+          array
+        }
+      }
+      case Cardinality.Exact(sizeExpr) => {
+        '{
+          val array = ${ newArray[OUT](sizeExpr) }
+          var index = 0
+          ${
+            val emit = Emit.Linear[OUT] { elem => '{ array(index) = $elem; index += 1 } }
+            buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
+          }
+          array
+        }
+      }
+      // Dimensione ridotta (es. Filter) o non definibile
+      case Cardinality.UpperBound(sizeExpr) => {
+        '{
+          val array = ${ newArray[OUT](sizeExpr) }
+          var index = 0
+          ${
+            val emit = Emit.Linear[OUT](elem => '{ array(index) = $elem; index += 1 })
+            buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
+          }
+          // Dobbiamo ritornare un sottoinsieme dell'array
+          if (index == array.length)
             array
+          else
+            array.take(index)
+        }
+      }
+      // Dimensione completamente ignota buffer dinamico (TODO: passare a versioni più performanti dell'arraybuffer)
+      case Cardinality.Unknown => {
+        '{
+          val builder = new scala.collection.mutable.ArrayBuffer[OUT]()
+          ${
+            val emit = Emit.Linear[OUT](elem => '{ builder.addOne($elem); () })
+            buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
           }
-        } else {
-          // Dimensione ridotta (es. Filter) o non definibile
-          sizeRef match {
-            // Abbiamo un Upper Bound, preallochiamo al massimo e tronchiamo alla fine
-            case Some(maxSizeExpr) =>
-              '{
-                val array = ${ newArray[OUT](maxSizeExpr) }
-                var index = 0
-
-                ${
-                  val emit = Emit.Linear[OUT](elem => '{ array(index) = $elem; index += 1 })
-                  buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
-                }
-                // Dobbiamo ritornare un sottoinsieme dell'array
-                if (index == array.length)
-                  array
-                else
-                  array.take(index)
-              }
-
-            // Dimensione completamente ignota buffer dinamico (TODO: passare a versioni più performanti dell'arraybuffer)
-            case None =>
-              '{
-                val builder = new scala.collection.mutable.ArrayBuffer[OUT]()
-
-                ${
-                  val emit = Emit.Linear[OUT](elem => '{ builder.addOne($elem); () })
-                  buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref)
-                }
-
-                val result = ${ newArray[OUT]('{ builder.size }) }
-                builder.copyToArray(result)
-                result
-              }
-          }
+          val result = ${ newArray[OUT]('{ builder.size }) }
+          builder.copyToArray(result)
+          result
         }
       }
     }
@@ -166,7 +121,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
 
   /* Crea il codice che istanzia un array del tipo dato dal parametro di tipo e della size data
    */
-  private def newArray[T: Type](size: Expr[Int])(using Quotes): Expr[Array[T]] = {
+  private def newArray[T: Type](size: Expr[Int]): Expr[Array[T]] = {
     val ctor = Select(New(TypeIdent(defn.ArrayClass)), defn.ArrayClass.primaryConstructor)
     val typedCtor = TypeApply(ctor, List(Inferred(TypeRepr.of[T])))
     Apply(typedCtor, List(size.asTerm)).asExprOf[Array[T]]
@@ -177,7 +132,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     predicates.reduceLeftOption((acc, pred) => '{ $acc && $pred })
   }
 
-  def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, Buf, R], collector: Expr[Collector[A, Buf, R]])(using Quotes): Expr[R] = {
+  def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, Buf, R], collector: Expr[Collector[A, Buf, R]]): Expr[R] = {
     val decls = optimizedStream.declarations
     val earlyExitRef: Option[Expr[Boolean]] = foldPredicates(optimizedStream.collectionStrategy.ref)
 
@@ -220,7 +175,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
 
   }
 
-  private def buildBody[OUT](tree: StreamTree[Phase.Enriched, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildBody[OUT](tree: StreamTree[Phase.Enriched, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]]): Expr[Unit] = {
     tree match {
       case source: EnrichedJListSource[OUT]             => buildJListSource(source, emit, exitPredicates)
       case source: EnrichedArraySource[OUT]             => buildArraySource(source, emit, exitPredicates)
@@ -232,7 +187,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
       case flatmap: EnrichedFlatMap[in, OUT]            => buildFlatMap(flatmap, emit, exitPredicates)
     }
   }
-  private def buildFlatMap[IN, OUT](flatMap: EnrichedFlatMap[IN, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildFlatMap[IN, OUT](flatMap: EnrichedFlatMap[IN, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]]): Expr[Unit] = {
 
     given Type[IN] = flatMap.inType
     given Type[OUT] = flatMap.outType
@@ -257,7 +212,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     // Generate the body of the upstream, emitting into the flatmap
     buildBody[IN](flatMap.upstream, flatMapEmit, exitPredicates)
   }
-  private def buildSlice[OUT](slice: EnrichedSlice[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildSlice[OUT](slice: EnrichedSlice[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[OUT] = slice.outType
 
     val callEmit: Expr[OUT] => Expr[Unit] = checkForEmitType(emit, "slice")
@@ -286,7 +241,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     buildBody[OUT](slice.upstream, upstreamEmit, earlyExitRef)
   }
 
-  private def buildIterableSource[OUT](source: IterableSource[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildIterableSource[OUT](source: IterableSource[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[OUT] = source.outType
     val exitCond = foldPredicates(earlyExitRef)
     val callEmit: Expr[OUT] => Expr[Unit] = checkForEmitType(emit, "Scala iterable")
@@ -306,7 +261,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
       }
     }
   }
-  private def buildArraySource[OUT](source: EnrichedArraySource[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildArraySource[OUT](source: EnrichedArraySource[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[OUT] = source.outType
 
     val exitCond = foldPredicates(earlyExitRef)
@@ -335,7 +290,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     }
   }
 
-  private def buildJIterableSource[OUT](source: JIterableSource[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildJIterableSource[OUT](source: JIterableSource[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[OUT] = source.outType
     val exitCond = foldPredicates(earlyExitRef)
 
@@ -356,7 +311,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     }
   }
 
-  private def buildJListSource[OUT](source: EnrichedJListSource[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildJListSource[OUT](source: EnrichedJListSource[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
 
     given Type[OUT] = source.outType
     val exitCond = foldPredicates(earlyExitRef)
@@ -425,7 +380,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     }
   }
 
-  private def buildFilter[OUT](filter: Filter[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildFilter[OUT](filter: Filter[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[OUT] = filter.outType
 
     val upstreamEmit: Emit[OUT] = Emit.Linear[OUT](elem => {
@@ -439,7 +394,7 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
     buildBody[OUT](filter.upstream, upstreamEmit, earlyExitRef)
   }
 
-  private def buildMap[IN, OUT](map: Map[Phase.Enriched, IN, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]])(using Quotes): Expr[Unit] = {
+  private def buildMap[IN, OUT](map: Map[Phase.Enriched, IN, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]]): Expr[Unit] = {
     given Type[IN] = map.inType
     given Type[OUT] = map.outType
     println(s"Map function AST: ${map.function.show}")
@@ -466,17 +421,6 @@ final class CodeGenerator[IR <: AnyIR](val ir: IR, val compileCfg: CompileConfig
       case Emit.Linear(f)  => elem => f(elem)
     }
 
-  }
-
-  private def getSourceSizeRef(tree: StreamTree[Phase.Enriched, ?]): Option[Expr[Int]] = tree match {
-    case source: EnrichedArraySource[?]          => Some(source.sizeRef)
-    case source: EnrichedJListSource[?]          => Some(source.sizeRef)
-    case map: Map[Phase.Enriched, ?, ?]          => getSourceSizeRef(map.upstream)
-    case filter: Filter[Phase.Enriched, ?]       => getSourceSizeRef(filter.upstream)
-    case slice: EnrichedSlice[?]                 => getSourceSizeRef(slice.upstream)
-    case fm: EnrichedFlatMap[?, ?]               => None
-    case is: IterableSource[Phase.Enriched, ?]   => None
-    case jis: JIterableSource[Phase.Enriched, ?] => None
   }
 
 }
