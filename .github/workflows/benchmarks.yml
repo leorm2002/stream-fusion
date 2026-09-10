@@ -92,7 +92,7 @@ jobs:
             git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit --allow-empty -m 'Initialize benchmark history'
-            git checkout -
+            git switch main
           fi
 
       - name: Update benchmark charts and history
