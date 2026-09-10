@@ -21,3 +21,12 @@ java -jar sbt-launch.jar "benchmarks / Jmh / run .*Benchmark.*"
 ```
 
 Add `-prof gc` to measure allocation rate and garbage-collection pressure.
+
+## GitHub Actions
+
+To generate the same JSON locally from the repository root:
+
+```sh
+sbt -batch 'benchmarks / Jmh / compile'
+sbt -batch "benchmarks / Jmh / run -foe true -rf json -rff \"$PWD/benchmarks/target/jmh-results.json\" .*Benchmark.*"
+```
