@@ -1,0 +1,131 @@
+.benchmark-graphs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.benchmark-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e5e9;
+  border-radius: 8px;
+}
+
+.benchmark-card-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.benchmark-chart-frame {
+  position: relative;
+  min-width: 0;
+  height: 240px;
+  margin-top: auto;
+}
+
+.benchmark-chart {
+  max-width: none;
+}
+
+.benchmark-section-title {
+  margin: 24px 0 12px;
+  font-size: 1.4rem;
+}
+
+.benchmark-comparison-description {
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.benchmark-comparison-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.benchmark-comparison-controls label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.benchmark-run-select {
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.benchmark-comparison-params,
+.benchmark-comparison-hint {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+
+.benchmark-comparison-values summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.benchmark-comparison-values table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.benchmark-comparison-values th,
+.benchmark-comparison-values td {
+  padding: 6px 0;
+  border-bottom: 1px solid #e2e5e9;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.benchmark-comparison-values tbody th {
+  font-weight: 400;
+}
+
+.benchmark-comparison-values th:last-child,
+.benchmark-comparison-values td:last-child {
+  padding-left: 8px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+header a {
+  overflow-wrap: anywhere;
+}
+
+footer {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .benchmark-graphs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .benchmark-graphs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

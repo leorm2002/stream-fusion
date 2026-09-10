@@ -117,6 +117,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/benchmark-site"
           git archive gh-pages | tar -x -C "$RUNNER_TEMP/benchmark-site"
           cp "$RUNNER_TEMP/jmh-results/jmh-results.json" "$RUNNER_TEMP/benchmark-site/jmh-results.json"
+          python3 benchmarks/site/prepare.py "$RUNNER_TEMP/benchmark-site"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

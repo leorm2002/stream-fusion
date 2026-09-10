@@ -24,6 +24,19 @@ Add `-prof gc` to measure allocation rate and garbage-collection pressure.
 
 ## GitHub Actions
 
+Charts use four columns on desktop, two on smaller screens, and one on mobile.
+The dashboard starts with comparisons: each card groups the methods of one
+benchmark class (such as `MapToListBenchmark`) with identical parameters and
+measurement units. Different input sizes get separate cards. Select an execution
+to compare its results; the latest execution is selected by default. Expand
+**Values** for the numerical results. For execution times such as `us/op`, lower
+is better; for throughput such as `ops/s`, higher is better.
+
+The per-method history remains below the comparisons. Both views are generated
+from `data.js`, so new benchmark classes and methods appear automatically.
+The layout and comparison scripts in `benchmarks/site/` are applied at every
+Pages deployment.
+
 The dashboard includes a download of the historical chart data. The latest raw
 JMH output is also available as
 [`jmh-results.json`](https://leorm2002.github.io/stream-fusion/jmh-results.json).
