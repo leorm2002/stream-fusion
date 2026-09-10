@@ -24,6 +24,10 @@ Add `-prof gc` to measure allocation rate and garbage-collection pressure.
 
 ## GitHub Actions
 
+The dashboard includes a download of the historical chart data. The latest raw
+JMH output is also available as
+[`jmh-results.json`](https://leorm2002.github.io/stream-fusion/jmh-results.json).
+
 To generate the same JSON locally from the repository root:
 
 ```sh
