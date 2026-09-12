@@ -8,6 +8,9 @@ import scala.quoted.staging.*
 import fuse.{FusedStream, Collector}
 import FusedStream.*
 import scala.collection.mutable.ListBuffer
+import fuse.internal.ir.StreamIr
+import fuse.internal.Parser
+import fuse.internal.ir.ExecutionMode
 
 class ParserTest extends FunSuite {
   given Compiler = Compiler.make(getClass.getClassLoader)
@@ -26,9 +29,9 @@ class ParserTest extends FunSuite {
           .map((z: String) => s"Risultato: $z") // Step 4: Altra Map
       }
 
-      val mockCollector: Expr[Collector[String, ListBuffer[String], List[String], NoEarlyStopping]] = '{ Collector.toList[String] }
+      val mockCollector: Expr[Collector[String, ListBuffer[String], List[String], Exhaustive]] = '{ Collector.toList[String] }
       // 2. Chiamata al Parser
-      val astResult = parser.parseExpression[String, ListBuffer[String], List[String], NoEarlyStopping](mockStreamExpr, mockCollector, ExecutionMode.Sequential)
+      val astResult = parser.parseExpression[String, ListBuffer[String], List[String], Exhaustive](mockStreamExpr, mockCollector, ExecutionMode.Sequential)
       def getPrevious(arg0: parser.ir.StreamTree[?, ?]) = {
         arg0 match {
           case p: parser.ir.WithUpstream[?, ?] => p.upstream
@@ -38,19 +41,19 @@ class ParserTest extends FunSuite {
       assert(astResult != null)
 
       // Map
-      assertEquals(astResult.parsedStream.getClass().getName(), "fuse.StreamIr$StreamTree$Map")
+      assertEquals(astResult.parsedStream.getClass().getName(), "fuse.internal.ir.StreamIr$StreamTree$Map")
 
       // Map
       var prev = getPrevious(astResult.parsedStream)
-      assertEquals(prev.getClass().getName(), "fuse.StreamIr$StreamTree$Map")
+      assertEquals(prev.getClass().getName(), "fuse.internal.ir.StreamIr$StreamTree$Map")
 
       // Filter
       prev = getPrevious(prev)
-      assertEquals(prev.getClass().getName(), "fuse.StreamIr$StreamTree$Filter")
+      assertEquals(prev.getClass().getName(), "fuse.internal.ir.StreamIr$StreamTree$Filter")
 
       // Map
       prev = getPrevious(prev)
-      assertEquals(prev.getClass().getName(), "fuse.StreamIr$StreamTree$Map")
+      assertEquals(prev.getClass().getName(), "fuse.internal.ir.StreamIr$StreamTree$Map")
     }
   }
 

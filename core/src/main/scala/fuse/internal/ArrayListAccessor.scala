@@ -1,4 +1,4 @@
-package fuse
+package fuse.internal
 import java.lang.invoke.{MethodHandles, VarHandle}
 import java.util.ArrayList
 

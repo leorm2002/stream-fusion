@@ -1,4 +1,4 @@
-package fuse
+package fuse.internal.ir
 
 import scala.quoted.Quotes
 import scala.quoted.Expr
@@ -6,6 +6,7 @@ import scala.quoted.Type
 import scala.collection.mutable.ArrayBuilder
 import javax.smartcardio.Card
 import scala.annotation.elidable
+import fuse.internal.{CollectionStrategy, EnrichedCollectionStrategy}
 
 // Alias the StreamIr to a type combined with singleton. this will guarantee no problem with path deendant type
 type AnyIR = StreamIr & Singleton

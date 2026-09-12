@@ -5,7 +5,7 @@ import fuse.FusedStream.*
 import java.util.concurrent.TimeUnit
 import org.openjdk.jmh.annotations.*
 import org.openjdk.jmh.infra.Blackhole
-import scala.concurrent.ExecutionContext.Implicits.global
+
 
 @BenchmarkMode(Array(Mode.AverageTime))
 @OutputTimeUnit(TimeUnit.MICROSECONDS)

@@ -1,6 +1,9 @@
-package fuse
+package fuse.internal.ir
 
 import scala.quoted.*
+import fuse.internal.ir.AnyIR
+import fuse.CollectorBase
+import fuse.Summable
 
 // Preserve the identity of the operation IR across lowering and code generation.
 type AnyOPIR = OPIr[?] & Singleton

@@ -1,6 +1,8 @@
-package fuse
+package fuse.internal
 
 import scala.quoted.*
+import fuse.internal.ir.AnyOPIR
+import fuse.internal.ArrayListAccessor
 
 /** Emits Scala code from an operation program, independently of stream lowering. */
 final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR) {

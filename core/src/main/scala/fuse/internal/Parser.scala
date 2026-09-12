@@ -1,16 +1,25 @@
-package fuse
+package fuse.internal
 import scala.quoted.*
 import scala.collection.mutable.ArrayBuilder
 import scala.annotation.targetName
 import CollectionStrategy.*
+import fuse.internal.ir.{AnyIR, ExecutionMode, Phase}
+import fuse.internal.CollectionStrategy
+import fuse.Collector
+import fuse.TerminationPolicy
+import fuse.Summable
+import fuse.ShortCircuiting
+import fuse.CollectorBase
+import  fuse.Stream
+
 final class Parser[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
   import ir.*
   import ir.quotes.reflect.*
   import ir.StreamTree.*
 
-  def parseExpression[A: Type, Buf: Type, R: Type, S <: StopPolicy](
-      stream: Expr[fuse.Stream[A]],
+  def parseExpression[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](
+      stream: Expr[Stream[A]],
       collector: Expr[Collector[A, Buf, R, S]],
       executionMode: ExecutionMode
   ): Ast[A, Buf, R] = {
@@ -225,7 +234,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  private def extractCollectionStrategy[A: Type, Buf: Type, R: Type, S <: StopPolicy](collector: Expr[Collector[A, Buf, R, S]])(using Quotes): CollectionStrategy[A, Buf, R] = {
+  private def extractCollectionStrategy[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](collector: Expr[Collector[A, Buf, R, S]])(using Quotes): CollectionStrategy[A, Buf, R] = {
 
     // Check if we are treating the "fake" toArray collector
     val rawTpe = collector.asTerm.tpe
@@ -267,7 +276,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
           case AppliedType(_, List(_, _, _, policy)) =>policy
           case _ =>report.errorAndAbort(s"Unexpected Collector type: ${dealiasedTpe.show}")
         }
-      val isEarlyStopping = stopPolicy <:< TypeRepr.of[HasEarlyStopping]
+      val isEarlyStopping = stopPolicy <:< TypeRepr.of[ShortCircuiting]
       WithCollector(collector.asExprOf[CollectorBase[A, Buf, R]], isEarlyStopping)
 
     }

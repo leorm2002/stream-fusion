@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 import org.openjdk.jmh.annotations.*
 import org.openjdk.jmh.infra.Blackhole
 import java.util.function.ToIntFunction
-import scala.concurrent.ExecutionContext.Implicits.global
+
 @BenchmarkMode(Array(Mode.AverageTime))
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @Warmup(iterations = 5, time = 500, timeUnit = TimeUnit.MILLISECONDS)
@@ -24,29 +24,29 @@ class MegamorphicBenchmark {
 
   private def fused1(xs: java.util.List[String]): Int = {
     // inline given CompileConfig = CompileConfig(true, true)
-    FusedStream.from(xs).map(_.length).collect(Collector.summing)
+    FusedStream.from(xs).map(_.length).collect(summing)
   }
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused2(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+  private def fused2(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(summing)
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused3(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+  private def fused3(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(summing)
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused4(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+  private def fused4(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(summing)
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused5(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+  private def fused5(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(summing)
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused6(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+  private def fused6(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(summing)
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused7(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+  private def fused7(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(summing)
 
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-  private def fused8(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(Collector.summing)
+  private def fused8(xs: java.util.List[String]): Int = FusedStream.from(xs).map(_.length).collect(summing)
 
   @Benchmark
   @OperationsPerInvocation(8)

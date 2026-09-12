@@ -8,5 +8,5 @@ case class RuntimeConfig(ec: ExecutionContext,timeoutMillis: Long)
 
 object RuntimeConfig {
   // Uses the default global given ExecutionContext
-  given default(using ec: ExecutionContext): RuntimeConfig = RuntimeConfig(ec,5000L)
+  given default: RuntimeConfig = RuntimeConfig(ExecutionContext.global,5000L)
 }

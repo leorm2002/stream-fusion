@@ -1,10 +1,8 @@
 package fuse
 import munit.FunSuite
-import fuse.{FusedStream, Collector}
 import FusedStream.*
-import RuntimeConfig.*
 import scala.annotation.static
-import scala.concurrent.ExecutionContext.Implicits.global
+
 import scala.compiletime.testing.typeCheckErrors
 object E2eTests {
   @static
@@ -27,7 +25,7 @@ class E2eTests extends FunSuite {
 
     val found = FusedStream
       .from(nums)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(1))
   }
@@ -37,7 +35,7 @@ class E2eTests extends FunSuite {
 
     val found = FusedStream
       .from(nums)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(1))
   }
@@ -46,7 +44,7 @@ class E2eTests extends FunSuite {
 
     val found = FusedStream
       .from(nums)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(1d))
   }
@@ -55,7 +53,7 @@ class E2eTests extends FunSuite {
 
     val found = FusedStream
       .from(nums)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option("1"))
   }
@@ -66,7 +64,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .skip(2)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(3))
   }
@@ -76,7 +74,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .skip(2)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(3))
   }
@@ -87,7 +85,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .skip(2)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(3.0))
   }
@@ -98,7 +96,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .skip(2)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option("3"))
   }
@@ -110,7 +108,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((1, 1)))
   }
@@ -122,7 +120,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .skip(2)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((3, 3)))
   }
@@ -134,7 +132,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((1, 1)))
   }
@@ -146,7 +144,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .skip(2)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((3, 3)))
   }
@@ -158,7 +156,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((1.0, 1.0)))
   }
@@ -170,7 +168,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .skip(2)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((3.0, 3.0)))
   }
@@ -182,7 +180,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(("1", "1")))
   }
@@ -194,7 +192,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .skip(2)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(("3", "3")))
   }
@@ -206,7 +204,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .filter(_ % 2 == 0)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((2, 2)))
   }
@@ -219,7 +217,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .filter(_ % 2 == 0)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((2, 2)))
   }
@@ -232,7 +230,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .filter(_ % 2 == 0)
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option((2.0, 2.0)))
   }
@@ -245,7 +243,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .filter(_.toIntOption.exists(_ % 2 == 0))
       .map(x => (x, x))
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(("2", "2")))
   }
@@ -260,7 +258,7 @@ class E2eTests extends FunSuite {
       .flatMap(a => FusedStream.from(InfiniteRepeater(a)).limit(4))
       .map(x => (x, x))
       .limit(20)
-      .collect(Collector.toList)
+      .collect(toList)
 
     val expected = List(
       ("1", "1"),
@@ -288,7 +286,7 @@ class E2eTests extends FunSuite {
       .flatMap(a => FusedStream.from(InfiniteRepeater(a)).limit(4))
       .map(x => (x, x))
       .limit(20)
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result.size, 20)
     assertEquals(result.head, ("1", "1"))
@@ -305,7 +303,7 @@ class E2eTests extends FunSuite {
       .flatMap(a => FusedStream.from(InfiniteRepeater(a)).limit(4))
       .map(x => (x, x))
       .limit(20)
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result.size, 20)
     assertEquals(result.head, ("1.0", "1.0"))
@@ -321,7 +319,7 @@ class E2eTests extends FunSuite {
       .flatMap(a => FusedStream.from(InfiniteRepeater(a)).limit(4))
       .map(x => (x, x))
       .limit(20)
-      .collect(Collector.toList)
+      .collect(toList)
 
     val expectedFirst4 = List(
       ("a", "a"),
@@ -343,7 +341,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .flatMap(a => FusedStream.from(InfiniteRepeater(a)).map(x => (a, x)).limit(4))
       .limit(20)
-      .collect(Collector.toList)
+      .collect(toList)
 
     val expectedFirst4 = List(
       ("a", "a"),
@@ -370,7 +368,7 @@ class E2eTests extends FunSuite {
       .limit(20)
       .map(E2eTests.myMapper)
       .map(E2eTests.myMapper2)
-      .collect(Collector.toList)
+      .collect(toList)
 
     val expectedFirst4 = List(
       ("a", "a"),
@@ -402,7 +400,7 @@ class E2eTests extends FunSuite {
       .limit(20)
       .map(E2eTests.myMapper)
       .map(E2eTests.myMapper2)
-      .collect(Collector.toList)
+      .collect(toList)
     val expectedFirst4 = List(
       ("a", "(a,a)"),
       ("a", "(a,a)(a,a)"),
@@ -423,7 +421,7 @@ class E2eTests extends FunSuite {
       FusedStream.from(source)
     })
       .skip(2)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(3))
   }
@@ -436,7 +434,7 @@ class E2eTests extends FunSuite {
     val found = FusedStream
       .from(nums)
       .skip(elementsToSkip())
-      .collect(Collector.findFirst)
+      .collect(findFirst)
 
     assertEquals(found, Option(3))
   }
@@ -454,7 +452,7 @@ class E2eTests extends FunSuite {
     val result = FusedStream
       .from(nums)
       .skip(elementsToSkip())
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result, List(3, 4, 5))
     assertEquals(calls, 1)
@@ -473,7 +471,7 @@ class E2eTests extends FunSuite {
     val result = FusedStream
       .from(nums)
       .limit(elementsToLimit())
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result, List(1, 2))
     assertEquals(calls, 1)
@@ -490,7 +488,7 @@ class E2eTests extends FunSuite {
         x * 2
       })
       .map(x => x + x)
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result, List(4, 8, 12))
     assertEquals(calls, 3)
@@ -507,7 +505,7 @@ class E2eTests extends FunSuite {
         x * 2
       })
       .map(_ => 42)
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result, List(42, 42, 42))
     assertEquals(calls, 3)
@@ -525,7 +523,7 @@ class E2eTests extends FunSuite {
     val result = FusedStream
       .from(nums)
       .map(mapper())
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result, List(2, 4, 6))
     assertEquals(calls, 1)
@@ -544,7 +542,7 @@ class E2eTests extends FunSuite {
     val result = FusedStream
       .from(nums)
       .filter(makePredicate())
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result, List(2, 4))
     assertEquals(calls, 1)
@@ -569,7 +567,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .map(mapper1())
       .map(mapper2())
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result, List(3, 5, 7))
     assertEquals(mapper1Calls, 1)
@@ -595,7 +593,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .filter(predicate1())
       .filter(predicate2())
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(result, List(2, 4))
     assertEquals(predicate1Calls, 1)
@@ -609,7 +607,7 @@ class E2eTests extends FunSuite {
     val fromOnly = FusedStream
       .from(nums)
       .skip(3)
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(
       fromOnly,
@@ -620,7 +618,7 @@ class E2eTests extends FunSuite {
     val untilOnly = FusedStream
       .from(nums)
       .limit(4)
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(
       untilOnly,
@@ -632,7 +630,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .skip(3)
       .limit(4)
-      .collect(Collector.toList)
+      .collect(toList)
 
     assertEquals(
       fromAndUntil,
@@ -647,7 +645,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .parallel()
       .map(_ * 2)
-      .collect(Collector.toArray)
+      .collect(toArray)
 
     assertEquals(found.toSeq, Array(2, 4, 6, 8, 10).toSeq)
   }
@@ -663,7 +661,7 @@ class E2eTests extends FunSuite {
       .from(nums)
       .map(_ * 2)
       .parallel()
-      .collect(Collector.toArray)
+      .collect(toArray)
   """)
 
     assert(errors.nonEmpty)
@@ -679,11 +677,11 @@ class E2eTests extends FunSuite {
       .from(nums)
       .parallel()
       .map(_ * 2)
-      .collect(Collector.findFirst)
+      .collect(findFirst)
   """)
 
     assert(errors.nonEmpty)
-    assert(errors.exists(_.message.contains("CombinableCollector")))
+    assert(errors.exists(_.message.contains("ParallelCollector")))
   }
   import scala.compiletime.testing.typeCheckErrors
 
@@ -701,7 +699,7 @@ class E2eTests extends FunSuite {
           .parallel()
           .map(y => x + y)
       }
-      .collect(Collector.toList)
+      .collect(toList)
   """)
 
     assert(errors.nonEmpty)
@@ -713,7 +711,7 @@ class E2eTests extends FunSuite {
     FusedStream
       .from(xs)
       .parallel()
-      .collect(Collector.toList)
+      .collect(toList)
   """)
 
     assert(errors.nonEmpty)
@@ -727,7 +725,7 @@ class E2eTests extends FunSuite {
       .from(xs)
       .parallel()
       .parallel()
-      .collect(Collector.toList)
+      .collect(toList)
   """)
 
     assert(errors.nonEmpty)

@@ -1,7 +1,9 @@
-package fuse
+package fuse.internal
 
 import scala.collection.mutable.ArrayBuilder
 import scala.quoted.Expr
+import fuse.Summable
+import fuse.CollectorBase
 
 /** Sealed hierarchy of the possible collection modes */
 enum CollectionStrategy[A, Buf, R] {

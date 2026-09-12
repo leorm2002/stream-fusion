@@ -1,7 +1,12 @@
-package fuse
+package fuse.internal
 
 import scala.quoted.*
 import CollectionStrategy.*
+import fuse.internal.ir.Phase
+import fuse.internal.ir.AnyOPIR
+import fuse.CompileConfig
+import fuse.Summable
+import fuse.CollectorBase
 
 final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg: CompileConfig) {
   val ir: opIr.streamIr.type = opIr.streamIr
