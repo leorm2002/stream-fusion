@@ -30,6 +30,8 @@ lazy val core = project
     commonSettings,
     name := "stream-fusion-core",
     version := projectVesion,
+    Test / fork := true,
+    Test / javaOptions += "--add-opens=java.base/java.util=ALL-UNNAMED",
     libraryDependencies += "org.scalameta" %% "munit" % "1.0.0" % Test,
     libraryDependencies += "org.scala-lang" %% "scala3-staging" % scalaVersion.value % Test
   )

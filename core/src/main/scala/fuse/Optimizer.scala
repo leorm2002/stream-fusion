@@ -11,27 +11,24 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
 
   def optimize[OUT, Buf, R](ast: ir.Ast[OUT, Buf, R]): AstExt[OUT, Buf, R] = {
 
-    // Stream optimization
-    // val optimizedStream = optimize(ast.parsedStream)
-
     // Stream enrichment
     val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
     val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](ast.parsedStream, earlyRef.toList)
 
-    // Verifica se gli indici di produzione sono 1:1 con quelli della fonte
-    val hasAlignedIndexes = checkAlignedIndexes(enrichedStream)
-    // Estrae, se è presente, l'esrpressione che definisce l'upper bound della fonte
-    val cardinality = hasKnownSourceSize(enrichedStream)
+    // Verifica se gli indici di produzione sono 1:1 con quelli della fonte, Estrae, se è presente, l'esrpressione che definisce l'upper bound della fonte
+    val streamInfo = analyze(enrichedStream)
+    
     AstExt(
       enrichedStream,
-      ast.prefixStatements ::: declarations ::: exitDeclarations,
+      ast.prefixStatements,
+      declarations ::: exitDeclarations,
       EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs),
-      hasAlignedIndexes,
-      cardinality
+      streamInfo.hasAlignedIndexes,
+      streamInfo.cardinality
     )
   }
 
-  private def enrich[OUT, Buf, R](strategy: CollectionStrategy[OUT, Buf, R]): (Option[Expr[Boolean]], List[Statement]) = {
+  private def enrich[OUT, Buf, R](strategy: CollectionStrategy[OUT, Buf, R]): (Option[Expr[Boolean]], List[Declaration]) = {
 
     strategy match {
       // If is a toArray/Summing strategy no enrichment is needed it will be handled completely in the code generation phase with native types specializtion
@@ -39,17 +36,13 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
       case Summing() => (None, Nil)
       // Here we have to emit the variable for exiting the stream: the declaration and the  expsression that links it
       case WithCollector(collector) => {
-        val collectorTpe: TypeRepr = collector.asTerm.tpe
-        val earlyStoppingType = TypeRepr.of[fuse.EarlyStopping]
-        val isEarlyStopping = collectorTpe <:< earlyStoppingType
+        val isEarlyStopping = collector.asTerm.tpe <:< TypeRepr.of[fuse.EarlyStopping]
         println(s"With collector: ${collector.getClass()} early stop: ${isEarlyStopping}")
         if (isEarlyStopping) {
-
           // Create a dedicated variable for exit
           val counterSymbol = createVariable[Boolean]("keepProducing")
-          val valDef = createDef(counterSymbol, true)
           val counterRef = Ref(counterSymbol).asExprOf[Boolean]
-          return (Option(counterRef), List(valDef))
+          return (Option(counterRef), List(Declaration.Impl(counterSymbol, Expr(true))))
         } else {
           return (None, Nil)
         }
@@ -58,41 +51,14 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  // def optimize[OUT](parsedStream: StreamTree[Phase.RawOUT]): StreamTree[OUT] = {
-  //   println(s"[Optimizing Node] => $parsedStream")
-
-  //   parsedStream match {
-  //     // TODO: change limit and skip to a slice, maybe at parse time
-
-  //     // Both limit and skip have no possible optimizations
-  //     case Slice(upstream, count, count2, outType) => Slice(optimize(upstream), count, count2, outType)
-
-  //     case map: Map[in, OUT] => Map[in, OUT](upstream = optimize(map.upstream), function = map.function, inType = map.inType, outType = map.outType)
-
-  //     case filter: Filter[OUT] => Filter[OUT](upstream = optimize(filter.upstream), predicate = filter.predicate, outType = filter.outType)
-
-  //     case flatMap: FlatMap[in, OUT] =>
-  //       FlatMap(optimize(flatMap.upstream), optimize(flatMap.innerTree), flatMap.inType, flatMap.outType, flatMap.elemSymbol, flatMap.innerDeclarations)
-
-  //     // ========== Root nodes ==========
-  //     case source: JListSource[in]     => source
-  //     case source: ArraySource[in]     => source
-  //     case source: EnrichedJListSource[in]     => source
-  //     case source: EnrichedArraySource[in]     => source
-  //     case source: IterableSource[in]  => source // It's the root nodw
-  //     case source: JIterableSource[in] => source // It's the root nodw
-
-  //   }
-
-  // }
-
   /** Navigate bottom up enriching the components
     *
     * @param parsedStream
     */
-  private def enrich[OUT](parsedStream: StreamTree[Phase.Raw, OUT], exitPredicates: List[Expr[Boolean]])(using
-      Quotes
-  ): (StreamTree[Phase.Enriched, OUT], List[Statement], List[Expr[Boolean]]) = {
+  private def enrich[OUT](
+      parsedStream: StreamTree[Phase.Raw, OUT],
+      exitPredicates: List[Expr[Boolean]]
+  ): (StreamTree[Phase.Enriched, OUT], List[Declaration], List[Expr[Boolean]]) = {
 
     // Recursevly enrich upstream (bottom up)
     println(s"[Enriching Node] => $parsedStream")
@@ -118,7 +84,7 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
 
         // Single position counter for the whole slice
         val counterSymbol = createVariable[Int]("sliceCounter")
-        val counterDef = createDef(counterSymbol, 0)
+        val counterDef = Declaration.Impl(counterSymbol, Expr(0))
         val counterRef = Ref(counterSymbol).asExprOf[Int]
 
         // `until` can stop traversal completely, so bubble it down to the source.
@@ -158,7 +124,6 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
 
         // Enriche the inner stream, already extracted during the optimization phase, gathers exitPredicates + local predicates to the inner
         val (innerEnrichedTree, innerDecls, innerAccumulatedPredicates) = enrich[OUT](fm.innerTree, exitPredicates)
-        val allInnerDecls = fm.innerDeclarations ++ innerDecls
         // Recurisvy Enrich the upstream upstream using the predicates from the level of the flatmap
         val (enrichedUpstream, upstreamDeclarations, fullExitPredicates) = enrich[in](fm.upstream, exitPredicates)
 
@@ -169,7 +134,8 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
             inType = fm.inType,
             outType = fm.outType,
             elemSymbol = fm.elemSymbol,
-            innerDeclarations = allInnerDecls,
+            innerDeclarations = fm.innerDeclarations,
+            innerMaterialized = innerDecls,
             predicates = innerAccumulatedPredicates
           )
 
@@ -185,21 +151,21 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
         given Type[OUT] = source.outType
         val sourceSymbol = createConstant[Array[OUT]]("source")
         val sourceRef = Ref(sourceSymbol).asExprOf[Array[OUT]]
-        val sourceDef = ValDef(sourceSymbol, Some(source.term.asTerm))
+        val sourceDef = Declaration.Impl(sourceSymbol, source.term)
         val sizeSymbol = createConstant[Int]("sourceSize")
         val sizeRef = Ref(sizeSymbol).asExprOf[Int]
-        val sizeDef = ValDef(sizeSymbol, Some('{ $sourceRef.length }.asTerm))
-        (EnrichedArraySource[OUT](sourceRef, sizeRef, source.outType), List[Statement](sourceDef, sizeDef), exitPredicates)
+        val sizeDef = Declaration.Impl(sizeSymbol, '{ $sourceRef.length })
+        (EnrichedArraySource[OUT](sourceRef, sizeRef, source.outType), List[Declaration](sourceDef, sizeDef), exitPredicates)
 
       case source: JListSource[OUT] =>
         given Type[OUT] = source.outType
         val sourceSymbol = createConstant[java.util.List[OUT]]("source")
         val sourceRef = Ref(sourceSymbol).asExprOf[java.util.List[OUT]]
-        val sourceDef = ValDef(sourceSymbol, Some(source.term.asTerm))
+        val sourceDef = Declaration.Impl(sourceSymbol, source.term)
         val sizeSymbol = createConstant[Int]("sourceSize")
         val sizeRef = Ref(sizeSymbol).asExprOf[Int]
-        val sizeDef = ValDef(sizeSymbol, Some('{ $sourceRef.size() }.asTerm))
-        (EnrichedJListSource[OUT](sourceRef, sizeRef, source.outType), List[Statement](sourceDef, sizeDef), exitPredicates)
+        val sizeDef = Declaration.Impl(sizeSymbol, '{ $sourceRef.size() })
+        (EnrichedJListSource[OUT](sourceRef, sizeRef, source.outType), List[Declaration](sourceDef, sizeDef), exitPredicates)
 
     }
 
@@ -207,23 +173,19 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
 
   /** Materializa an expression of int into a constant, this permits to avoid double calls
     */
-  private def materializeInt(name: String, value: Expr[Int]): (Expr[Int], Statement) = {
+  private def materializeInt(name: String, value: Expr[Int]): (Expr[Int], Declaration) = {
     val symbol = createConstant[Int](name)
-    val definition = ValDef(symbol, Some(value.asTerm))
     val ref = Ref(symbol).asExprOf[Int]
-    (ref, definition)
+    (ref, Declaration.Impl(symbol, value))
   }
 
-  private def materializeFunction[IN: Type, OUT: Type](name: String, function: Expr[IN => OUT]): (Expr[IN => OUT], List[Statement]) = {
-
+  private def materializeFunction[IN: Type, OUT: Type](name: String, function: Expr[IN => OUT]): (Expr[IN => OUT], List[Declaration]) = {
     if (isDirectLambda(function.asTerm)) {
       (function, Nil)
     } else {
       val symbol = createConstant[IN => OUT](name)
-      val definition = ValDef(symbol, Some(function.asTerm))
       val ref = Ref(symbol).asExprOf[IN => OUT]
-
-      (ref, List(definition))
+      (ref, List(Declaration.Impl(symbol, function)))
     }
   }
 
@@ -237,42 +199,28 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  /** Verifica ricorsivamente se lo stream conserva una corrispondenza posizionale sorgente e accumulatore
-    */
-  private def checkAlignedIndexes(tree: StreamTree[Phase.Enriched, ?]): Boolean = {
+  final case class StreamProperties(cardinality: Cardinality, hasAlignedIndexes: Boolean)
+
+  private def analyze(tree: StreamTree[Phase.Enriched, ?]): StreamProperties = {
     tree match {
-      // Radici supportate con indice 0..len-1 nativo
-      case _: EnrichedJListSource[?] => true
-      case _: EnrichedArraySource[?] => true
+      case source: EnrichedJListSource[?] => StreamProperties(Cardinality.Exact(source.sizeRef), true)
+      case source: EnrichedArraySource[?] => StreamProperties(Cardinality.Exact(source.sizeRef), true)
 
-      // Trasformazione 1:1 che preserva l'indice (propaga a monte)
-      case map: Map[Phase.Enriched, ?, ?] => checkAlignedIndexes(map.upstream)
+      case _: IterableSource[Phase.Enriched, ?]  => StreamProperties(Cardinality.Unknown, false)
+      case _: JIterableSource[Phase.Enriched, ?] => StreamProperties(Cardinality.Unknown, false)
 
-      // Operazioni che alterano cardinalità o offset
-      case _: Filter[Phase.Enriched, ?] => false
-      case _: EnrichedSlice[?]          => false
-      case _: EnrichedFlatMap[?, ?]     => false
+      case map: Map[Phase.Enriched, ?, ?]    => analyze(map.upstream)
+      case filter: Filter[Phase.Enriched, ?] => {
+        val upstream = analyze(filter.upstream)
+        upstream.copy(hasAlignedIndexes = false, cardinality = upstream.cardinality.asUpperBound)
+      }
+      // TODO: potenzialmente possiamo accumulare le ref alle variabili e definire la size in maniera esatta
+      case slice: EnrichedSlice[?] => {
+        val upstream = analyze(slice.upstream)
+        upstream.copy(hasAlignedIndexes = slice.from.isEmpty && upstream.hasAlignedIndexes, cardinality = upstream.cardinality.asUpperBound)
+      }
 
-      // Radici basate su iteratore (senza indice contiguo)
-      case _: IterableSource[Phase.Enriched, ?]  => false
-      case _: JIterableSource[Phase.Enriched, ?] => false
+      case _: EnrichedFlatMap[?, ?] => StreamProperties(Cardinality.Unknown, false)
     }
   }
-
-  private def hasKnownSourceSize(tree: StreamTree[Phase.Enriched, ?]): Cardinality = {
-    tree match {
-      case source: EnrichedJListSource[?] => Cardinality.Exact(source.sizeRef)
-      case source: EnrichedArraySource[?] => Cardinality.Exact(source.sizeRef)
-
-      case _: IterableSource[Phase.Enriched, ?]  => Cardinality.Unknown
-      case _: JIterableSource[Phase.Enriched, ?] => Cardinality.Unknown
-
-      case map: Map[Phase.Enriched, ?, ?]    => hasKnownSourceSize(map.upstream)
-      case filter: Filter[Phase.Enriched, ?] => hasKnownSourceSize(filter.upstream).asUpperBound
-      case slice: EnrichedSlice[?]           => hasKnownSourceSize(slice.upstream).asUpperBound
-
-      case _: EnrichedFlatMap[?, ?] => Cardinality.Unknown
-    }
-  }
-
 }

@@ -47,7 +47,8 @@ class StreamIr(using val quotes: Quotes) {
     */
   case class AstExt[A, Buf, R](
       val enrichedStream: StreamTree[Phase.Enriched, A],
-      val declarations: List[Statement],
+      val prefixStatements: List[Statement],
+      val declarations: List[Declaration],
       val collectionStrategy: EnrichedCollectionStrategy[A, Buf, R],
       val hasAlignedIndexes: Boolean,
       val cardinality: Cardinality
@@ -127,25 +128,12 @@ class StreamIr(using val quotes: Quotes) {
         outType: Type[B],
         elemSymbol: Symbol,
         innerDeclarations: List[Statement],
+        innerMaterialized: List[Declaration],
         val predicates: List[Expr[Boolean]]
     ) extends StreamTree[Phase.Enriched, B] with WithUpstream[Phase.Enriched, A]
   }
 
   /** These are used in all the phases of the compiler, here to simplify invocation */
-  // In StreamIr:
-
-  type Accepted = Int | Long | Float | Double | Boolean
-
-  def createDef(symbol: Symbol, value: Accepted): ValDef = {
-    val const = value match {
-      case i: Int     => IntConstant(i)
-      case l: Long    => LongConstant(l)
-      case f: Float   => FloatConstant(f)
-      case d: Double  => DoubleConstant(d)
-      case b: Boolean => BooleanConstant(b)
-    }
-    ValDef(symbol, Some(Literal(const)))
-  }
 
   def createConstant[T: Type](name: String) = {
     Symbol.newVal(
@@ -165,5 +153,20 @@ class StreamIr(using val quotes: Quotes) {
       flags = Flags.Mutable, // Mutable 'var'
       privateWithin = Symbol.noSymbol
     )
+  }
+
+  sealed trait Declaration {
+    type T
+
+    def symbol: Symbol
+    def expr: Expr[T]
+    def valueType: Type[T]
+  }
+
+  object Declaration {
+
+    final case class Impl[A](symbol: Symbol, expr: Expr[A])(using val valueType: Type[A]) extends Declaration {
+      type T = A
+    }
   }
 }

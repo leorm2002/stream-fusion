@@ -98,8 +98,10 @@ object Macro {
     val optimized = Optimizer(ir).optimize(parsed)
     // logOptimized(optimized)
 
-    // Given the sequence of operation generate the code
-    val res = CodeGenerator(ir, compileCfg).generateCode(optimized)
+    // Share the operation IR between lowering and code generation, preserving the Quotes instance.
+    val opIr = OPIr(ir)
+    val program = OPGenerator(opIr, compileCfg).generate(optimized)
+    val res = OPCodeGenerator(opIr).lower(program)
     println(s"=== FUSED STREAM GENERATED ===")
     println(res.show)
     println(s"==============================")
