@@ -5,8 +5,7 @@ import FusedStream.*
 import RuntimeConfig.*
 import scala.annotation.static
 import scala.concurrent.ExecutionContext.Implicits.global
-
-
+import scala.compiletime.testing.typeCheckErrors
 object E2eTests {
   @static
   def alwaysTrue[A](a: A, b: A): Boolean = {
@@ -639,5 +638,138 @@ class E2eTests extends FunSuite {
       fromAndUntil,
       List(4, 5, 6, 7)
     )
+  }
+
+  test("Parallel map test ") {
+    val nums = Array(1, 2, 3, 4, 5)
+
+    val found = FusedStream
+      .from(nums)
+      .parallel()
+      .map(_ * 2)
+      .collect(Collector.toArray)
+
+    assertEquals(found.toSeq, Array(2, 4, 6, 8, 10).toSeq)
+  }
+
+  import scala.compiletime.testing.typeCheckErrors
+
+  test("parallel can only be applied directly to a splittable source") {
+
+    val errors = typeCheckErrors("""
+    val nums = Array(1, 2, 3, 4, 5)
+
+    FusedStream
+      .from(nums)
+      .map(_ * 2)
+      .parallel()
+      .collect(Collector.toArray)
+  """)
+
+    assert(errors.nonEmpty)
+    assert(errors.exists(_.message.contains("parallel")))
+  }
+
+  test("Parallel stream cannot use an early-stopping collector") {
+
+    val errors = typeCheckErrors("""
+    val nums = Array(1, 2, 3, 4, 5)
+
+    FusedStream
+      .from(nums)
+      .parallel()
+      .map(_ * 2)
+      .collect(Collector.findFirst)
+  """)
+
+    assert(errors.nonEmpty)
+    assert(errors.exists(_.message.contains("CombinableCollector")))
+  }
+  import scala.compiletime.testing.typeCheckErrors
+
+  test("flatMap inner stream cannot be parallel") {
+    val errors = typeCheckErrors("""
+    val xs = Array(1, 2, 3)
+    val ys = Array(10, 20, 30)
+
+    FusedStream
+      .from(xs)
+      .parallel()
+      .flatMap { x =>
+        FusedStream
+          .from(ys)
+          .parallel()
+          .map(y => x + y)
+      }
+      .collect(Collector.toList)
+  """)
+
+    assert(errors.nonEmpty)
+  }
+  test("parallel cannot be used on non-splittable source") {
+    val errors = typeCheckErrors("""
+    val xs = List(1, 2, 3)
+
+    FusedStream
+      .from(xs)
+      .parallel()
+      .collect(Collector.toList)
+  """)
+
+    assert(errors.nonEmpty)
+    assert(errors.exists(_.message.contains("parallel")))
+  }
+  test("parallel cannot be called twice") {
+    val errors = typeCheckErrors("""
+    val xs = Array(1, 2, 3)
+
+    FusedStream
+      .from(xs)
+      .parallel()
+      .parallel()
+      .collect(Collector.toList)
+  """)
+
+    assert(errors.nonEmpty)
+    assert(errors.exists(_.message.contains("parallel")))
+  }
+  test("parallel stream requires a combinable collector") {
+    val errors = typeCheckErrors("""
+    import scala.collection.mutable.ListBuffer
+
+    val xs = Array(1, 2, 3)
+
+    val collector =
+      new Collector[
+        Int,
+        ListBuffer[Int],
+        List[Int],
+        NoEarlyStopping
+      ] {
+
+        override def supplier(): ListBuffer[Int] =
+          ListBuffer.empty[Int]
+
+        override def accumulator(
+            buf: ListBuffer[Int],
+            elem: Int
+        ): Boolean = {
+          buf += elem
+          false
+        }
+
+        override def finisher(
+            buf: ListBuffer[Int]
+        ): List[Int] =
+          buf.toList
+      }
+
+    FusedStream
+      .from(xs)
+      .parallel()
+      .collect(collector)
+  """)
+
+    assert(errors.nonEmpty)
   }
 }

@@ -24,7 +24,8 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
       declarations ::: exitDeclarations,
       EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs),
       streamInfo.hasAlignedIndexes,
-      streamInfo.cardinality
+      streamInfo.cardinality,
+      ast.executionMode
     )
   }
 
@@ -35,8 +36,7 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
       case ToArray() => (None, Nil)
       case Summing() => (None, Nil)
       // Here we have to emit the variable for exiting the stream: the declaration and the  expsression that links it
-      case WithCollector(collector) => {
-        val isEarlyStopping = collector.asTerm.tpe <:< TypeRepr.of[fuse.EarlyStopping]
+      case WithCollector(collector,isEarlyStopping) => {
         println(s"With collector: ${collector.getClass()} early stop: ${isEarlyStopping}")
         if (isEarlyStopping) {
           // Create a dedicated variable for exit
@@ -203,8 +203,8 @@ final class Optimizer[IR <: AnyIR](val ir: IR) {
 
   private def analyze(tree: StreamTree[Phase.Enriched, ?]): StreamProperties = {
     tree match {
-      case source: EnrichedJListSource[?] => StreamProperties(Cardinality.Exact(source.sizeRef), true)
-      case source: EnrichedArraySource[?] => StreamProperties(Cardinality.Exact(source.sizeRef), true)
+      case EnrichedJListSource(term, sizeRef, outType) => StreamProperties(Cardinality.Exact(sizeRef), true)
+      case EnrichedArraySource(term, sizeRef, outType) => StreamProperties(Cardinality.Exact(sizeRef), true)
 
       case _: IterableSource[Phase.Enriched, ?]  => StreamProperties(Cardinality.Unknown, false)
       case _: JIterableSource[Phase.Enriched, ?] => StreamProperties(Cardinality.Unknown, false)

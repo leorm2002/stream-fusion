@@ -8,7 +8,12 @@ final class Parser[IR <: AnyIR](val ir: IR) {
   import ir.*
   import ir.quotes.reflect.*
   import ir.StreamTree.*
-  def parseExpression[A: Type, Buf: Type, R: Type](stream: Expr[fuse.Stream[A]], collector: Expr[Collector[A, Buf, R]]): Ast[A, Buf, R] = {
+
+  def parseExpression[A: Type, Buf: Type, R: Type, S <: StopPolicy](
+      stream: Expr[fuse.Stream[A]],
+      collector: Expr[Collector[A, Buf, R, S]],
+      executionMode: ExecutionMode
+  ): Ast[A, Buf, R] = {
     println("Starting  to parse the stream body")
     println("=== parseTerm ===")
     println(stream.asTerm.show)
@@ -36,7 +41,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     println("Terminal parsing done")
     println("Parsing the done")
 
-    Ast(parsedTree.getCurrent(), parsedCollector, parsedTree.declarations)
+    Ast(parsedTree.getCurrent(), parsedCollector, parsedTree.declarations, executionMode)
   }
 
   private def parseTerm(expr: ir.quotes.reflect.Term): ParsedTree = {
@@ -68,6 +73,8 @@ final class Parser[IR <: AnyIR](val ir: IR) {
 
       /** ====================      (FlatMap)  ==================== */
       case Apply(TypeApply(Select(upstream, "flatMap"), List(outType: TypeTree)), List(f)) => appendFlatMap(parseTerm(upstream), f, outType)
+      /** ====================      (Parallel)  ==================== */
+      case Apply(Select(upstream, "parallel"), _) => parseTerm(upstream) // it's used just for to type check the stream, all the information have already been used here
 
       /** ==================================== Error fallback ==================================== */
       case other => report.errorAndAbort(s"StreamFusion: unexpected expression: ${other}")
@@ -218,7 +225,7 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     }
   }
 
-  private def extractCollectionStrategy[A: Type, Buf: Type, R: Type](collector: Expr[Collector[A, Buf, R]])(using Quotes): CollectionStrategy[A, Buf, R] = {
+  private def extractCollectionStrategy[A: Type, Buf: Type, R: Type, S <: StopPolicy](collector: Expr[Collector[A, Buf, R, S]])(using Quotes): CollectionStrategy[A, Buf, R] = {
 
     // Check if we are treating the "fake" toArray collector
     val rawTpe = collector.asTerm.tpe
@@ -254,7 +261,15 @@ final class Parser[IR <: AnyIR](val ir: IR) {
       Summing[A & Summable]().asInstanceOf[CollectionStrategy[A, Buf, R]]
     } else {
       println(" --> is a generic collector")
-      WithCollector[A, Buf, R](collector)
+      val collectorBaseType = dealiasedTpe.baseType(TypeRepr.of[Collector].typeSymbol)
+
+      val stopPolicy = collectorBaseType match {
+          case AppliedType(_, List(_, _, _, policy)) =>policy
+          case _ =>report.errorAndAbort(s"Unexpected Collector type: ${dealiasedTpe.show}")
+        }
+      val isEarlyStopping = stopPolicy <:< TypeRepr.of[HasEarlyStopping]
+      WithCollector(collector.asExprOf[CollectorBase[A, Buf, R]], isEarlyStopping)
+
     }
   }
 
@@ -296,12 +311,10 @@ final class Parser[IR <: AnyIR](val ir: IR) {
     val declarations: List[ir.quotes.reflect.Statement]
     final def outType: Type[Out] = current.outType
 
-    def getCurrent[A](): StreamTree[Phase.Raw,A] = {
-      current.asInstanceOf[StreamTree[Phase.Raw,A]]
-    }
+    def getCurrent[A](): StreamTree[Phase.Raw, A] = { current.asInstanceOf[StreamTree[Phase.Raw, A]]}
   }
 
-  private final case class ParsedTreeImpl[A](current: StreamTree[Phase.Raw,A], declarations: List[ir.quotes.reflect.Statement]) extends ParsedTree {
+  private final case class ParsedTreeImpl[A](current: StreamTree[Phase.Raw, A], declarations: List[ir.quotes.reflect.Statement]) extends ParsedTree {
     type Out = A
   }
 }

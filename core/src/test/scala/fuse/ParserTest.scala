@@ -7,6 +7,7 @@ import scala.quoted.*
 import scala.quoted.staging.*
 import fuse.{FusedStream, Collector}
 import FusedStream.*
+import scala.collection.mutable.ListBuffer
 
 class ParserTest extends FunSuite {
   given Compiler = Compiler.make(getClass.getClassLoader)
@@ -25,15 +26,13 @@ class ParserTest extends FunSuite {
           .map((z: String) => s"Risultato: $z") // Step 4: Altra Map
       }
 
-      val mockCollector: Expr[Collector[String, List[String], List[String]]] = '{ ??? }
-
+      val mockCollector: Expr[Collector[String, ListBuffer[String], List[String], NoEarlyStopping]] = '{ Collector.toList[String] }
       // 2. Chiamata al Parser
-      val astResult = parser.parseExpression[String, List[String], List[String]](mockStreamExpr, mockCollector)
-
-      def getPrevious(arg0: parser.ir.StreamTree[?,?]) = {
+      val astResult = parser.parseExpression[String, ListBuffer[String], List[String], NoEarlyStopping](mockStreamExpr, mockCollector, ExecutionMode.Sequential)
+      def getPrevious(arg0: parser.ir.StreamTree[?, ?]) = {
         arg0 match {
-          case p: parser.ir.WithUpstream[?,?] => p.upstream
-          case _                            => null
+          case p: parser.ir.WithUpstream[?, ?] => p.upstream
+          case _                               => null
         }
       }
       assert(astResult != null)

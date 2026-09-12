@@ -130,18 +130,20 @@ class OPIr[IR <: AnyIR](val streamIr: IR) {
     override val valueType: Type[Array[A]] = Type.of[Array[A]]
   }
 
-  final case class CollectorSupplier[A, Buf, R](collector: Value[Collector[A, Buf, R]])(using val elemType: Type[A], val valueType: Type[Buf], val resultType: Type[R])
+  final case class CollectorSupplier[A, Buf, R](
+      collector: Value[CollectorBase[A, Buf, R]]
+  )(using val elemType: Type[A], val valueType: Type[Buf], val resultType: Type[R])
       extends Value[Buf]
 
-  final case class CollectorAccumulate[A, Buf, R](collector: Value[Collector[A, Buf, R]], buffer: Value[Buf], elem: Value[A])(using
+  final case class CollectorAccumulate[A, Buf, R](collector: Value[CollectorBase[A, Buf, R]], buffer: Value[Buf], elem: Value[A])(using
       val elemType: Type[A],
       val bufferType: Type[Buf],
       val resultType: Type[R]
   ) extends Value[Boolean] {
-    override val valueType: Type[Boolean] = Type.of[Boolean]
+    override val valueType: Type[Boolean] =
+      Type.of[Boolean]
   }
-
-  final case class CollectorFinish[A, Buf, R](collector: Value[Collector[A, Buf, R]], buffer: Value[Buf])(using
+  final case class CollectorFinish[A, Buf, R](collector: Value[CollectorBase[A, Buf, R]], buffer: Value[Buf])(using
       val elemType: Type[A],
       val bufferType: Type[Buf],
       val valueType: Type[R]

@@ -13,17 +13,15 @@ final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg: Compile
   import opIr.{quotes => _, *} // We must only use the quotes instance of ir
   import opIr.Op.*
 
-  def generate[ELEM, Buf, OUT](
-      optimizedStream: AstExt[ELEM, Buf, OUT]
-  )(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT]): Program[OUT] = {
+  def generate[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, Buf, OUT])(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT]): Program[OUT] = {
     val decls = optimizedStream.declarations
     println(s"Numero di dichiarazioni: ${decls.size}")
     println(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
 
     optimizedStream.collectionStrategy.collectionStrategy match {
-      case ToArray()                               => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, Array[ELEM]]]).asInstanceOf[Program[OUT]]
-      case _: Summing[t]                           => generateSummingAccumulator[t](optimizedStream.asInstanceOf[AstExt[t, Nothing, t]])(using elemType.asInstanceOf[Type[t]])
-      case WithCollector[ELEM, Buf, OUT](collExpr) => generateGenericAccumulator(optimizedStream, collExpr)
+      case ToArray()               => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, Array[ELEM]]]).asInstanceOf[Program[OUT]]
+      case _: Summing[t]           => generateSummingAccumulator[t](optimizedStream.asInstanceOf[AstExt[t, Nothing, t]])(using elemType.asInstanceOf[Type[t]])
+      case WithCollector(collExpr, _) => generateGenericAccumulator(optimizedStream, collExpr)
     }
   }
 
@@ -142,10 +140,10 @@ final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg: Compile
     )
   }
 
-  def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, Buf, R], collector: Expr[Collector[A, Buf, R]]): Program[R] = {
-    val collectorSymbol = createConstant[Collector[A, Buf, R]]("collector")
+  def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, Buf, R], collector: Expr[CollectorBase[A, Buf, R]]): Program[R] = {
+    val collectorSymbol = createConstant[CollectorBase[A, Buf, R]]("collector")
     val bufferSymbol = createConstant[Buf]("buffer")
-    val collectorRef = SymbolRef[Collector[A, Buf, R]](collectorSymbol)
+    val collectorRef = SymbolRef[CollectorBase[A, Buf, R]](collectorSymbol)
     val bufferRef = SymbolRef[Buf](bufferSymbol)
 
     val emit: Emit[A] = emitted => {

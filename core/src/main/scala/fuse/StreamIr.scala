@@ -18,6 +18,14 @@ object Phase {
   sealed trait Enriched extends Phase
 }
 
+/**
+  * Represents the mode of execution of a stream: sequential or parallel
+  */
+enum ExecutionMode {
+  case Sequential
+  case Parallel
+}
+
 /** This try to represent the tree of a stream after parsing and before generation, it also act as a container for itmes that uses the path dependent quotes making the usage easier
   * across all the compiler
   *
@@ -41,17 +49,18 @@ class StreamIr(using val quotes: Quotes) {
   }
 
   /** The base AST, abtained by the parsing phase */
-  case class Ast[A, Buf, R](parsedStream: StreamTree[Phase.Raw, A], collectionStrategy: CollectionStrategy[A, Buf, R], prefixStatements: List[Statement])
+  case class Ast[A, Buf, R](parsedStream: StreamTree[Phase.Raw, A], collectionStrategy: CollectionStrategy[A, Buf, R], prefixStatements: List[Statement],executionMode: ExecutionMode)
 
   /** Represents parsed optimized and enriched stream
     */
   case class AstExt[A, Buf, R](
-      val enrichedStream: StreamTree[Phase.Enriched, A],
-      val prefixStatements: List[Statement],
-      val declarations: List[Declaration],
-      val collectionStrategy: EnrichedCollectionStrategy[A, Buf, R],
-      val hasAlignedIndexes: Boolean,
-      val cardinality: Cardinality
+      enrichedStream: StreamTree[Phase.Enriched, A],
+      prefixStatements: List[Statement],
+      declarations: List[Declaration],
+      collectionStrategy: EnrichedCollectionStrategy[A, Buf, R],
+      hasAlignedIndexes: Boolean,
+      cardinality: Cardinality,
+      executionMode: ExecutionMode
   )
 
   /** When present indicates that the node has a predecessor, only the root nodes are not WithUpstream */
