@@ -11,7 +11,7 @@ type AnyOPIR = OPIr[?] & Singleton
 /** Contains the operation data model, following the instance-bound types used by StreamIr. Sharing its Quotes instance keeps stream symbols and statements usable in both
   * generation phases.
   */
-class OPIr[IR <: AnyIR](val streamIr: IR) {
+private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
   val quotes: streamIr.quotes.type = streamIr.quotes
   private given macroQuotes: quotes.type = quotes
 

@@ -13,8 +13,8 @@ type AnyIR = StreamIr & Singleton
 
 /** Represents the phase of the item of the tree (see Phase-indexed fields in Trees that Grow Simon - Shayan Najd/Peyton Jones)
   */
-sealed trait Phase
-object Phase {
+private[internal] sealed trait Phase
+private[internal] object Phase {
   sealed trait Raw extends Phase
   sealed trait Enriched extends Phase
 }
@@ -22,7 +22,7 @@ object Phase {
 /**
   * Represents the mode of execution of a stream: sequential or parallel
   */
-enum ExecutionMode {
+private[internal] enum ExecutionMode {
   case Sequential
   case Parallel
 }
@@ -32,7 +32,7 @@ enum ExecutionMode {
   *
   * @param quotes
   */
-class StreamIr(using val quotes: Quotes) {
+private[internal] class StreamIr(using val quotes: Quotes) {
   import quotes.reflect.*
 
   enum Cardinality {

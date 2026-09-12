@@ -1,4 +1,4 @@
-package fuse
+package fuse.internal
 import munit.FunSuite
 import scala.quoted.Type
 import scala.quoted.Expr
@@ -11,6 +11,7 @@ import scala.collection.mutable.ListBuffer
 import fuse.internal.ir.StreamIr
 import fuse.internal.Parser
 import fuse.internal.ir.ExecutionMode
+import fuse.Exhaustive
 
 class ParserTest extends FunSuite {
   given Compiler = Compiler.make(getClass.getClassLoader)
@@ -20,7 +21,7 @@ class ParserTest extends FunSuite {
       val parser = Parser(ir) // Assumendo che Parser accetti (ir)
 
       // 1. Creiamo un'espressione quote che simula la catena stream.map(...).filter(...)
-      val mockStreamExpr: Expr[Stream[String]] = '{
+      val mockStreamExpr = '{
         FusedStream
           .of(2)
           .map((x: Int) => x * 2) // Step 1: Map

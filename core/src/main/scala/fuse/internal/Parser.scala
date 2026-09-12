@@ -12,7 +12,7 @@ import fuse.ShortCircuiting
 import fuse.CollectorBase
 import  fuse.Stream
 
-final class Parser[IR <: AnyIR](val ir: IR) {
+private final class Parser[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
   import ir.*
   import ir.quotes.reflect.*

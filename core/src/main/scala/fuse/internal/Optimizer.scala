@@ -4,7 +4,7 @@ import CollectionStrategy.*
 import fuse.internal.ir.{AnyIR, Phase}
 import fuse.internal.{CollectionStrategy, EnrichedCollectionStrategy}
 
-final class Optimizer[IR <: AnyIR](val ir: IR) {
+private final class Optimizer[IR <: AnyIR](val ir: IR) {
   private given macroQuotes: ir.quotes.type = ir.quotes
 
   import ir.*

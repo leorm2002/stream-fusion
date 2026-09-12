@@ -8,7 +8,7 @@ import fuse.CompileConfig
 import fuse.Summable
 import fuse.CollectorBase
 
-final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg: CompileConfig) {
+private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg: CompileConfig) {
   val ir: opIr.streamIr.type = opIr.streamIr
   private given macroQuotes: ir.quotes.type = ir.quotes
 

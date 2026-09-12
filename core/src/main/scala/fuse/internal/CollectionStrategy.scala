@@ -6,7 +6,7 @@ import fuse.Summable
 import fuse.CollectorBase
 
 /** Sealed hierarchy of the possible collection modes */
-enum CollectionStrategy[A, Buf, R] {
+private enum CollectionStrategy[A, Buf, R] {
 
   /** This mode is derived from the opaque toArray collector, it doesn't actually have an associated collector, it instead works directly on an array for maximum performance */
   case ToArray[A]() extends CollectionStrategy[A, Nothing, Array[A]]
@@ -25,4 +25,4 @@ enum CollectionStrategy[A, Buf, R] {
   *   eventual other vairable wich may be added to signal to exti (es. a limit clause)
   */
 // We do not use Phase-indexed fields here, this is an extension shared across all cases
-case class EnrichedCollectionStrategy[A, Buf, R](collectionStrategy: CollectionStrategy[A, Buf, R], earlyExitVar: Option[Expr[Boolean]], ref: List[Expr[Boolean]])
+private case class EnrichedCollectionStrategy[A, Buf, R](collectionStrategy: CollectionStrategy[A, Buf, R], earlyExitVar: Option[Expr[Boolean]], ref: List[Expr[Boolean]])
