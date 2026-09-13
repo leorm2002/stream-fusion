@@ -13,12 +13,13 @@ import scala.annotation.static
 import java.util.concurrent.atomic.AtomicReference
 
 /** Emits Scala code from an operation program, independently of stream lowering. */
-private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, runCfg: Expr[RuntimeConfig]) {
+private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, runCfg: Expr[RuntimeConfig], val logger: FusedLogger) {
   private given macroQuotes: opIr.quotes.type = opIr.quotes
 
   import opIr.*
   import opIr.quotes.reflect.*
   import opIr.Op.*
+  import logger.*
 
   private var conf: Expr[RuntimeConfig] = scala.compiletime.uninitialized
 

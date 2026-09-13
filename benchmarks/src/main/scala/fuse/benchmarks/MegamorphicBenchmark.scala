@@ -23,7 +23,6 @@ class MegamorphicBenchmark {
   @CompilerControl(CompilerControl.Mode.DONT_INLINE)
 
   private def fused1(xs: java.util.List[String]): Int = {
-    // inline given CompileConfig = CompileConfig(true, true)
     FusedStream.from(xs).map(_.length).collect(summing)
   }
 

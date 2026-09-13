@@ -11,13 +11,14 @@ import fuse.internal.ir.StreamIr
 import fuse.internal.Parser
 import fuse.internal.ir.ExecutionMode
 import fuse.Exhaustive
+import fuse.CompileConfig
 
 class ParserTest extends FunSuite {
   given Compiler = Compiler.make(getClass.getClassLoader)
   test("Parser analizza correttamente la catena stream.map(...).filter(...)") {
     withQuotes {
       val ir = new StreamIr()
-      val parser = Parser(ir) // Assumendo che Parser accetti (ir)
+      val parser = Parser(ir, new FusedLogger(ir, CompileConfig(false, false))) // Assumendo che Parser accetti (ir)
 
       // 1. Creiamo un'espressione quote che simula la catena stream.map(...).filter(...)
       val mockStreamExpr = '{

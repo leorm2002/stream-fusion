@@ -10,7 +10,7 @@ import fuse.CollectorBase
 import scala.compiletime.ops.int
 import fuse.internal.ir.ExecutionMode
 
-private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg: CompileConfig) {
+private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg: CompileConfig, val logger: FusedLogger) {
   val ir: opIr.streamIr.type = opIr.streamIr
   private given macroQuotes: ir.quotes.type = ir.quotes
 
@@ -19,11 +19,12 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   import ir.StreamTree.*
   import opIr.{quotes => _, *} // We must only use the quotes instance of ir
   import opIr.Op.*
+  import logger.*
 
   def generate[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, Buf, OUT])(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT]): Program[OUT] = {
     val decls = optimizedStream.declarations
-    println(s"Numero di dichiarazioni: ${decls.size}")
-    println(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
+    debug(s"Numero di dichiarazioni: ${decls.size}")
+    debug(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
     val executionMode = optimizedStream.executionMode
     optimizedStream.collectionStrategy.collectionStrategy match {
       case ToArray()                  => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, Array[ELEM]]]).asInstanceOf[Program[OUT]]
@@ -476,7 +477,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   private def buildMap[IN, OUT](map: Map[Phase.Enriched, IN, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
     given Type[IN] = map.inType
     given Type[OUT] = map.outType
-    println(s"Map function AST: ${map.function.show}")
+    debug(s"Map function AST: ${map.function.show}")
 
     val upstreamEmit: Emit[IN] = u => {
       val mappedSymbol = createConstant[OUT]("mapped")

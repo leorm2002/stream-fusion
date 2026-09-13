@@ -4,12 +4,13 @@ import CollectionStrategy.*
 import fuse.internal.ir.{AnyIR, Phase}
 import fuse.internal.{CollectionStrategy, EnrichedCollectionStrategy}
 
-private final class Optimizer[IR <: AnyIR](val ir: IR) {
+private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
   private given macroQuotes: ir.quotes.type = ir.quotes
 
   import ir.*
   import ir.quotes.reflect.*
   import ir.StreamTree.*
+  import logger.*
 
   def optimize[OUT, Buf, R](ast: ir.Ast[OUT, Buf, R]): AstExt[OUT, Buf, R] = {
 
@@ -19,7 +20,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR) {
 
     // Verifica se gli indici di produzione sono 1:1 con quelli della fonte, Estrae, se è presente, l'esrpressione che definisce l'upper bound della fonte
     val streamInfo = analyze(enrichedStream)
-    
+
     AstExt(
       enrichedStream,
       ast.prefixStatements,
@@ -38,8 +39,8 @@ private final class Optimizer[IR <: AnyIR](val ir: IR) {
       case ToArray() => (None, Nil)
       case Summing() => (None, Nil)
       // Here we have to emit the variable for exiting the stream: the declaration and the  expsression that links it
-      case WithCollector(collector,isEarlyStopping) => {
-        println(s"With collector: ${collector.getClass()} early stop: ${isEarlyStopping}")
+      case WithCollector(collector, isEarlyStopping) => {
+        debug(s"With collector: ${collector.getClass()} early stop: ${isEarlyStopping}")
         if (isEarlyStopping) {
           // Create a dedicated variable for exit
           val counterSymbol = createVariable[Boolean]("keepProducing")
@@ -63,7 +64,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR) {
   ): (StreamTree[Phase.Enriched, OUT], List[Declaration], List[Expr[Boolean]]) = {
 
     // Recursevly enrich upstream (bottom up)
-    println(s"[Enriching Node] => $parsedStream")
+    debug(s"[Enriching Node] => $parsedStream")
 
     parsedStream match {
       case slice: Slice[OUT] => {

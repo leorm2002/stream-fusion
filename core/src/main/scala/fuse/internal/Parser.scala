@@ -10,26 +10,27 @@ import fuse.TerminationPolicy
 import fuse.Summable
 import fuse.ShortCircuiting
 import fuse.CollectorBase
-import  fuse.Stream
+import fuse.Stream
 
-private final class Parser[IR <: AnyIR](val ir: IR) {
+private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
   private given macroQuotes: ir.quotes.type = ir.quotes
+
   import ir.*
   import ir.quotes.reflect.*
   import ir.StreamTree.*
+  import logger.*
 
   def parseExpression[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](
       stream: Expr[Stream[A]],
       collector: Expr[Collector[A, Buf, R, S]],
       executionMode: ExecutionMode
   ): Ast[A, Buf, R] = {
-    println("Starting  to parse the stream body")
-    println("=== parseTerm ===")
-    println(stream.asTerm.show)
-    println(stream.asTerm.show(using Printer.TreeStructure))
+    debug("Starting  to parse the stream body")
+    debug("=== parseTerm ===")
+    debug(stream.asTerm.show)
+    debug(stream.asTerm.show(using Printer.TreeStructure))
     val parsedTree = parseTerm(stream.asTerm)
-    println("Stream body parsing done")
-
+    debug("Stream body parsing done")
     // Extract the type parsed as the output and check for validity
     // TODO:do we really need it? isn't alreadt guaranteed by the compilation
     type ParsedOut = parsedTree.Out
@@ -45,10 +46,10 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
         stream.asTerm.pos
       )
     }
-    println("Starting to parse the terminal")
+    debug("Starting to parse the terminal")
     val parsedCollector = extractCollectionStrategy(collector)
-    println("Terminal parsing done")
-    println("Parsing the done")
+    debug("Terminal parsing done")
+    debug("Parsing the done")
 
     Ast(parsedTree.getCurrent(), parsedCollector, parsedTree.declarations, executionMode)
   }
@@ -82,6 +83,7 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
 
       /** ====================      (FlatMap)  ==================== */
       case Apply(TypeApply(Select(upstream, "flatMap"), List(outType: TypeTree)), List(f)) => appendFlatMap(parseTerm(upstream), f, outType)
+
       /** ====================      (Parallel)  ==================== */
       case Apply(Select(upstream, "parallel"), _) => parseTerm(upstream) // it's used just for to type check the stream, all the information have already been used here
 
@@ -109,7 +111,7 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
       case jiter if jiter.derivesFrom(javaIterableSymbol) =>
         jiter.baseType(javaIterableSymbol) match {
           case AppliedType(_, List(elemTpe)) =>
-            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](JIterableSource[Phase.Raw,elem](term.asExprOf[java.lang.Iterable[elem]], Type.of[elem]), Nil) }
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](JIterableSource[Phase.Raw, elem](term.asExprOf[java.lang.Iterable[elem]], Type.of[elem]), Nil) }
         }
 
       case arr if arr.derivesFrom(arraySymbol) =>
@@ -120,7 +122,7 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
       case iter if iter.derivesFrom(iterableSymbol) =>
         iter.baseType(iterableSymbol) match {
           case AppliedType(_, List(elemTpe)) =>
-            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](IterableSource[Phase.Raw,elem](term.asExprOf[Iterable[elem]], Type.of[elem]), Nil) }
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](IterableSource[Phase.Raw, elem](term.asExprOf[Iterable[elem]], Type.of[elem]), Nil) }
         }
       case _ => report.errorAndAbort(s"StreamFusion: from() expected one of Iterable[T]/Array[T], got ${sourceTpr}", term.pos)
     }
@@ -134,7 +136,7 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
         //  Given the type of the element elem at runtime it will be converted to an iteratorable and enter in the from(iterable<>) flow. this can be optimized
         val singleExpr = item.asExprOf[elem]
         val iterableExpr: Expr[Iterable[elem]] = '{ Iterable.single[elem](${ singleExpr }) }
-        ParsedTreeImpl[elem](IterableSource[Phase.Raw,elem](iterableExpr, Type.of[elem]), Nil)
+        ParsedTreeImpl[elem](IterableSource[Phase.Raw, elem](iterableExpr, Type.of[elem]), Nil)
     }
   }
 
@@ -144,7 +146,7 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
     given Type[InOut] = upstream.outType
 
     val predicate = predicateTerm.asExprOf[InOut => Boolean]
-    val filter = Filter[Phase.Raw,InOut](upstream.current, predicate, upstream.outType)
+    val filter = Filter[Phase.Raw, InOut](upstream.current, predicate, upstream.outType)
 
     ParsedTreeImpl[InOut](filter, upstream.declarations)
   }
@@ -229,12 +231,14 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
       case '[out] =>
         // Cast the function term to an actual Function
         val function = functionTerm.asExprOf[In => out]
-        val map = Map[Phase.Raw,In, out](upstream.current, function, upstream.outType, Type.of[out])
+        val map = Map[Phase.Raw, In, out](upstream.current, function, upstream.outType, Type.of[out])
         ParsedTreeImpl[out](map, upstream.declarations)
     }
   }
 
-  private def extractCollectionStrategy[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](collector: Expr[Collector[A, Buf, R, S]])(using Quotes): CollectionStrategy[A, Buf, R] = {
+  private def extractCollectionStrategy[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](
+      collector: Expr[Collector[A, Buf, R, S]]
+  )(using Quotes): CollectionStrategy[A, Buf, R] = {
 
     // Check if we are treating the "fake" toArray collector
     val rawTpe = collector.asTerm.tpe
@@ -247,7 +251,7 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
     val summingSymbol = TypeRepr.of[Collector.SummingCollector[Nothing]].typeSymbol
     val isTheOpaqueSumming = dealiasedTpe.typeSymbol == summingSymbol
 
-    println(
+    debug(
       s"""|
       |=== Collector type debug ===
       |term:              ${collector.asTerm.show}
@@ -263,19 +267,19 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
     )
 
     if (isTheOpaqueToArray) {
-      println(" --> is a specialized to array")
+      debug(" --> is a specialized to array")
       ToArray[A]().asInstanceOf[CollectionStrategy[A, Buf, R]]
     } else if (isTheOpaqueSumming) {
-      println(" --> is a specialized sum")
+      debug(" --> is a specialized sum")
       Summing[A & Summable]().asInstanceOf[CollectionStrategy[A, Buf, R]]
     } else {
-      println(" --> is a generic collector")
+      debug(" --> is a generic collector")
       val collectorBaseType = dealiasedTpe.baseType(TypeRepr.of[Collector].typeSymbol)
 
       val stopPolicy = collectorBaseType match {
-          case AppliedType(_, List(_, _, _, policy)) =>policy
-          case _ =>report.errorAndAbort(s"Unexpected Collector type: ${dealiasedTpe.show}")
-        }
+        case AppliedType(_, List(_, _, _, policy)) => policy
+        case _                                     => report.errorAndAbort(s"Unexpected Collector type: ${dealiasedTpe.show}")
+      }
       val isEarlyStopping = stopPolicy <:< TypeRepr.of[ShortCircuiting]
       WithCollector(collector.asExprOf[CollectorBase[A, Buf, R]], isEarlyStopping)
 
@@ -320,7 +324,7 @@ private final class Parser[IR <: AnyIR](val ir: IR) {
     val declarations: List[ir.quotes.reflect.Statement]
     final def outType: Type[Out] = current.outType
 
-    def getCurrent[A](): StreamTree[Phase.Raw, A] = { current.asInstanceOf[StreamTree[Phase.Raw, A]]}
+    def getCurrent[A](): StreamTree[Phase.Raw, A] = { current.asInstanceOf[StreamTree[Phase.Raw, A]] }
   }
 
   private final case class ParsedTreeImpl[A](current: StreamTree[Phase.Raw, A], declarations: List[ir.quotes.reflect.Statement]) extends ParsedTree {

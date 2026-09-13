@@ -40,24 +40,24 @@ private[fuse] object Macro {
   )(using q: Quotes): Expr[R] = {
 
     val compileCfg = compileCfgExpr.valueOrAbort
-
     // The intermediate representation is istantiated in a class, to handle the Quotes istance being path dependand
     // the ir will passed to every step of the transpiler which will use it's quotes istnace as it's own
     val ir = StreamIr()
 
+    val logger = new FusedLogger(compileCfg)
     // Execute the parsing of the whole expression
-    val parsed = Parser(ir).parseExpression(stream, terminal, executionMode)
+    val parsed = Parser(ir, logger.of("Parser")).parseExpression(stream, terminal, executionMode)
 
     // Performa optimization, creates the variable and links the usage
-    val optimized = Optimizer(ir).optimize(parsed)
+    val optimized = Optimizer(ir, logger.of("Optimizer")).optimize(parsed)
 
     // Share the operation IR between lowering and code generation, preserving the Quotes instance.
     val opIr = OPIr(ir)
-    val program = OPGenerator(opIr, compileCfg).generate(optimized)
-    val res = OPCodeGenerator(opIr, runCfg).lower(program)
-    println(s"=== FUSED STREAM GENERATED ===")
-    println(res.show)
-    println(s"==============================")
+    val program = OPGenerator(opIr, compileCfg, logger).generate(optimized)
+    val res = OPCodeGenerator(opIr, runCfg, logger).lower(program)
+    logger.debug(s"=== FUSED STREAM GENERATED ===")
+    logger.debug(res.show)
+    logger.debug(s"==============================")
     res
   }
 }
