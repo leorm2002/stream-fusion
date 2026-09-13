@@ -17,7 +17,23 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
 
   import quotes.reflect.*
 
+  enum ParallelCombine[T] {
+    case Sum[T <: Summable](zero: Value[T]) extends ParallelCombine[T]
+    case ArrayConcat[T](validSize: Option[Value[Int]])(using val elemType: Type[T]) extends ParallelCombine[Array[T]]
+    case ArrayDirect[T]()(using val elemType: Type[T]) extends ParallelCombine[Array[T]]
+  }
+
   enum Op {
+
+    case Parallel[T](
+        returnSymbol: Symbol,
+        collectionSize: Value[Int],
+        from: Symbol,
+        to: Symbol,
+        statements: List[Op],
+        localResult: Value[T],
+        combiner: ParallelCombine[T]
+    )
 
     case ExternalStatement(statement: Statement)
 
@@ -84,7 +100,6 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
   final case class ArrayRead[T](array: Value[Array[T]], index: Value[Int])(using val valueType: Type[T]) extends Value[T]
 
   object ArrayRead {
-    def apply[T: Type](array: Expr[Array[T]], index: Value[Int]): ArrayRead[T] = new ArrayRead[T](ScalaExpr(array), index)
     def apply[T: Type](array: Expr[Array[T]], index: Symbol): ArrayRead[T] = new ArrayRead[T](ScalaExpr(array), SymbolRef[Int](index))
   }
 
@@ -157,6 +172,12 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
     def apply[T <: Summable: Type](left: Symbol, right: Value[T]): Add[T] = new Add[T](SymbolRef[T](left), right)
   }
 
+  final case class Subtract(
+      left: Value[Int],
+      right: Value[Int]
+  ) extends Value[Int] {
+    override val valueType: Type[Int] = Type.of[Int]
+  }
   final case class ApplyFun[IN, OUT](function: Expr[IN => OUT], argument: Value[IN])(using val inType: Type[IN], val valueType: Type[OUT]) extends Value[OUT]
 
   final case class Program[T](statements: List[Op], result: Value[T])

@@ -2,7 +2,6 @@ package fuse.internal
 import munit.FunSuite
 import scala.quoted.Type
 import scala.quoted.Expr
-import scala.quoted.Quotes
 import scala.quoted.*
 import scala.quoted.staging.*
 import fuse.{FusedStream, Collector}

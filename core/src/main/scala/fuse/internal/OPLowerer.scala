@@ -3,23 +3,57 @@ package fuse.internal
 import scala.quoted.*
 import fuse.internal.ir.AnyOPIR
 import fuse.internal.ArrayListAccessor
+import fuse.Summable
+import fuse.RuntimeConfig
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CountDownLatch
+import fuse.internal.parallel.ParallelSumCodegen
+import fuse.internal.parallel.ParallelArrayCodegen
+import scala.annotation.static
+import java.util.concurrent.atomic.AtomicReference
 
 /** Emits Scala code from an operation program, independently of stream lowering. */
-private final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR) {
+private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, runCfg: Expr[RuntimeConfig]) {
   private given macroQuotes: opIr.quotes.type = opIr.quotes
 
   import opIr.*
   import opIr.quotes.reflect.*
   import opIr.Op.*
 
+  private var conf: Expr[RuntimeConfig] = scala.compiletime.uninitialized
+
   def lower[OUT](program: Program[OUT])(using Type[OUT]): Expr[OUT] = {
+    '{
+      val conff = $runCfg
+      ${
+        conf = '{ conff }
+        lowerProgram(program)
+      }
+    }
+
+  }
+  def lowerProgram[OUT](program: Program[OUT])(using Type[OUT]): Expr[OUT] = {
     val statements = program.statements.flatMap(lowerOp)
     val result = lowerValue(program.result)
     Block(statements, result.asTerm).asExprOf[OUT]
   }
 
-  private def lowerOp(op: Op): List[Statement] = {
+  def lowerOp(op: Op): List[Statement] = {
     op match {
+      case parallel: Parallel[t] => {
+        given Type[t] = parallel.localResult.valueType
+        parallel.combiner match {
+          case sum: ParallelCombine.Sum[t]            => new ParallelSumCodegen[OPIR, this.type](conf, this).lowerParallelSum(parallel)
+          case concat: ParallelCombine.ArrayConcat[e] => {
+            given Type[e] = concat.elemType
+            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayConcat[e](parallel.asInstanceOf[Parallel[Array[e]]], concat)
+          }
+          case arrayDirect: ParallelCombine.ArrayDirect[e] => {
+            given Type[e] = arrayDirect.elemType
+            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayDirect[e](parallel.asInstanceOf[Parallel[Array[e]]])
+          }
+        }
+      }
       case ExternalStatement(statement) => List(statement)
       case CodeBlock(ops)               => List(Block(ops.flatMap(lowerOp), Literal(UnitConstant())))
       case declare: Declare[t]          => {
@@ -78,7 +112,7 @@ private final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR) {
     }
   }
 
-  private def lowerValue[T: Type](value: Value[T]): Expr[T] = {
+  def lowerValue[T: Type](value: Value[T]): Expr[T] = {
     value match {
       // Crea un Term da un quotes.reflect.Symbol e lo converte in Expr[T]
       case SymbolRef(symbol) => Ref(symbol).asExprOf[T]
@@ -229,6 +263,10 @@ private final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR) {
       case arr: ArrayDefine[t] =>
         given Type[t] = arr.elemType
         newArray[t](lowerValue(arr.size)).asExprOf[T]
+      case Subtract(left, right) =>
+        val l = lowerValue(left)
+        val r = lowerValue(right)
+        '{ $l - $r }.asExprOf[T]
     }
   }
 
@@ -255,9 +293,65 @@ private final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR) {
     }
   }
 
-  private def newArray[A: Type](size: Expr[Int]): Expr[Array[A]] = {
+  def newArray[A: Type](size: Expr[Int]): Expr[Array[A]] = {
     val ctor = Select(New(TypeIdent(defn.ArrayClass)), defn.ArrayClass.primaryConstructor)
     val typedCtor = TypeApply(ctor, List(Inferred(TypeRepr.of[A])))
     Apply(typedCtor, List(size.asTerm)).asExprOf[Array[A]]
   }
+
+  // Specialization for the specialized sum operator
+
+  def processParallelChunks(chunks: Expr[Int], workers: Expr[Int])(processChunk: Expr[Int] => Expr[Unit]): Expr[Unit] = {
+    '{
+      val failed = new AtomicReference[Throwable](null)
+      val nextChunk = new AtomicInteger($workers)
+      val latch = new CountDownLatch($workers)
+      var workerIdx = 0
+
+      while (workerIdx < $workers) {
+        val firstChunk = workerIdx
+        try {
+
+          $conf.ec.execute(
+            new Runnable {
+              override def run(): Unit = {
+                var chunkIdx = firstChunk
+                try {
+                  while (chunkIdx < $chunks) {
+                    ${ processChunk('{ chunkIdx }) }
+                    chunkIdx = nextChunk.getAndIncrement()
+                  }
+                } catch {
+                  case fail: Throwable => failed.compareAndSet(null, fail)
+                } finally {
+                  latch.countDown()
+                }
+              }
+            }
+          )
+        } catch {
+          case fail: Throwable => {
+            failed.compareAndSet(null, fail)
+            latch.countDown()
+          }
+        }
+        workerIdx += 1
+      }
+      scala.concurrent.blocking { latch.await() }
+
+      val error = failed.get()
+      if (error != null) {
+        throw error
+      }
+    }
+  }
+}
+
+object OPCodeGenerator {
+  inline def computeCount(size: Int, config: RuntimeConfig): Int = {
+    if (size == 0) 0
+    else if (config.workerCount == 1) 1
+    else math.min(size.toLong, config.workerCount.toLong * config.chunksPerWorker).toInt
+  }
+
 }
