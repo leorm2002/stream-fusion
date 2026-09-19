@@ -56,7 +56,7 @@ Per certi aspetti, il modello ottenuto richiama il paradigma di genericità dei 
 
 I benchmark condotti tramite JMH mostrano uno speedup significativo e un consumo di memoria drasticamente ridotto rispetto alle librerie standard. Il risultato è un framework che preserva l'espressività, la composizionalità e la type safety tipiche della programmazione funzionale.
 
-  \newpage
+\newpage
 \chapter{Metaprogrammazione e generazione statica del codice in Scala 3}
 \label{chap:metaprogramming}
 
@@ -83,7 +83,6 @@ Expr[T]
 
 e rappresenta codice che produrrà un valore di tipo \texttt{T} nello stage successivo.
 
-
 Uno splice:
 
 \begin{lstlisting}[language=Scala]
@@ -109,7 +108,6 @@ x * x * x * 1
 \end{lstlisting}
 
 e non contiene quindi né il ciclo né la ricorsione impiegata dal metaprogramma per costruirlo.
-
 
 \section{Metaprogrammazione generativa e analitica}
 \label{sec:generative-analytical}
@@ -139,13 +137,13 @@ expr.asTerm
 La Reflection API espone quindi la struttura tipizzata prodotta dal compilatore. Tra i nodi più importanti utilizzati nel parser vi sono:
 
 \begin{itemize}
-    \item \texttt{Apply}, per l'applicazione di una funzione;
-    \item \texttt{TypeApply}, per un'applicazione contenente parametri di tipo;
-    \item \texttt{Select}, per la selezione di un membro;
-    \item \texttt{Ident}, per il riferimento a un identificatore;
-    \item \texttt{Block}, per un blocco contenente dichiarazioni e un'espressione finale;
-    \item \texttt{Inlined}, per rappresentare il risultato di un'espansione inline;
-    \item \texttt{ValDef}, \texttt{Assign} e \texttt{Ref}, utilizzati durante la generazione di nuovo codice.
+  \item \texttt{Apply}, per l'applicazione di una funzione;
+  \item \texttt{TypeApply}, per un'applicazione contenente parametri di tipo;
+  \item \texttt{Select}, per la selezione di un membro;
+  \item \texttt{Ident}, per il riferimento a un identificatore;
+  \item \texttt{Block}, per un blocco contenente dichiarazioni e un'espressione finale;
+  \item \texttt{Inlined}, per rappresentare il risultato di un'espansione inline;
+  \item \texttt{ValDef}, \texttt{Assign} e \texttt{Ref}, utilizzati durante la generazione di nuovo codice.
 \end{itemize}
 
 Questo livello di rappresentazione è sostanzialmente più espressivo rispetto alle sole quote.
@@ -156,10 +154,9 @@ Questo livello di rappresentazione è sostanzialmente più espressivo rispetto a
 Scala 3 mette a disposizione due rappresentazioni complementari:
 
 \begin{description}
-    \item[\texttt{Type[T]}] rappresenta il tipo \texttt{T} nell'API staged ed è utilizzabile insieme a \texttt{Expr[T]}, quote e splice;
-    \item[\texttt{TypeRepr}] rappresenta invece un tipo all'interno della Reflection API e permette di ispezionarne direttamente la struttura.
+  \item[\texttt{Type[T]}] rappresenta il tipo \texttt{T} nell'API staged ed è utilizzabile insieme a \texttt{Expr[T]}, quote e splice;
+  \item[\texttt{TypeRepr}] rappresenta invece un tipo all'interno della Reflection API e permette di ispezionarne direttamente la struttura.
 \end{description}
-
 
 Data una \texttt{TypeRepr}, il metodo \texttt{.asType} restituisce un valore \texttt{Type[?]} sul quale è possibile eseguire pattern matching:
 
@@ -186,25 +183,24 @@ private def createSourceOf(item: Term): ParsedTree = {
 Questo esempio contiene in pochi passaggi l'intero collegamento tra reflection e staged programming:
 
 \begin{enumerate}
-    \item viene determinato il tipo del termine dell'AST ricevuto;
-    \item il tipo viene estratto in \texttt{elem} mediante il pattern \texttt{'[elem]};
-    \item il \texttt{Term} originale viene convertito in \texttt{Expr[elem]};
-    \item viene generato un nuovo frammento \texttt{Expr[Iterable[elem]]};
+  \item viene determinato il tipo del termine dell'AST ricevuto;
+  \item il tipo viene estratto in \texttt{elem} mediante il pattern \texttt{'[elem]};
+  \item il \texttt{Term} originale viene convertito in \texttt{Expr[elem]};
+  \item viene generato un nuovo frammento \texttt{Expr[Iterable[elem]]};
 \end{enumerate}
-
 
 \section{Beta reduction delle funzioni}
 \label{sec:beta-reduction}
 
 Un altro elemento importante è l'utilizzo della $\beta$-reduction, considerando una funzione:
 \begin{equation}
-f = x \mapsto e,
+  f = x \mapsto e,
 \end{equation}
 
 l'applicazione
 
 \begin{equation}
-f(a)
+  f(a)
 \end{equation}
 
 può essere riscritta sostituendo direttamente $x$ con $a$ all'interno di $e$.
@@ -214,7 +210,6 @@ Scala 3 rende disponibile questa trasformazione attraverso: \texttt{Expr.betaRed
 \begin{lstlisting}[language=Scala]
 val cond = Expr.betaReduce('{ ${ filter.predicate }($elem) })
 \end{lstlisting}
-
 
 Se la funzione ricevuta è una lambda direttamente disponibile alla macro, il suo corpo può quindi essere incorporato nel codice generato.
 
@@ -253,7 +248,7 @@ La distinzione tra nome e simbolo garantisce inoltre l'\emph{hygiene} della macr
 
 TODO: esempio creazione e uso
 
-\section{Requirement specification}
+\chapter{Requirement specification}
 
 \subsection{Requisiti di business}
 
@@ -267,122 +262,363 @@ TODO: esempio creazione e uso
 
 \subsection{Requisiti di implementazione}
 
-\section{Design architetturale}
+\chapter{Design architetturale}
 
 L'applicativo è composto da due aree: l'API utilizzabile e un compilatore che si occupa del parsing, ottimizzazione e creazione di codice ad hoc a partire del codice delle macro
 
+\chapter{Design di dettaglio}
 
+\section{Design dell'API pubblica}
 
-\section{Design di dettaglio}
-
-design dell'API
-
-alberi di parsing
-
-estensione per enrichement
-
-
-\subsection{Operazioni Supportate}
-Dato un generico stream $\mathcal{S}(A)$ ovvero una sequenza (potenzialmente infinita) di elementi omogenei presi dal dominio del tipo $A$, ovvero $\mathcal{S}(A) \in A^* \cup A^\infty$. 
-
-Di seguito vengono formalizzate, in termini di firma funzionale, semantica algebrica e cardinalità di emissione, le operazioni di trasformazione intermedie supportate.
-
-
-\subsubsection{Map (Trasformazione Funzionale Element-wise)}
-\label{sub:map}
-L'operatore \textsf{map} rappresenta l'applicazione di una funzione di trasformazione deterministica priva di side effects su ogni singolo elemento del flusso.
-
-\begin{definition}[Map]
-Sia $f: A \to B$ una funzione pura. L'operatore $\textsf{map}_f: \mathcal{S}(A) \to \mathcal{S}(B)$ trasforma la sequenza $\langle a_1, a_2, \dots \rangle$ nella sequenza $\langle f(a_1), f(a_2), \dots \rangle$.
-\end{definition}
+Particolare attenzione è stata posta nella progettazione dell'API pubblica della libreria.
+L'obiettivo è stato quello di fornire un'interfaccia che garantisse contemporaneamente:
 
 \begin{itemize}
-    \item \textbf{Firma e Tipo}: $\textsf{map}: (A \to B) \to (\mathcal{S}(A) \to \mathcal{S}(B))$
-    \item \textbf{Mappatura di Cardinalità}: $1 : 1$. Per ogni elemento in ingresso $a_i \in A$, l'operatore produce esattamente un elemento in uscita $b_i = f(a_i) \in B$.
-    \item \textbf{Proprietà Algebriche}: Operazione \emph{stateless} (priva di stato), locale e conservativa rispetto alla lunghezza del flusso ($|\mathcal{S}(B)| = |\mathcal{S}(A)|$).
+  \item la possibilità di descrivere pipeline sufficientemente espressive
+  \item l'estendibilità, in particolare per quanto riguarda le operazioni terminali
+  \item il maggior numero possibile di garanzie a compile time
+  \item la minimizzazione del codice necessario per verificare dinamicamente la correttezza
+    delle combinazioni di operazioni richieste dall'utente.
 \end{itemize}
 
-\subsubsection{Filter (Proiezione Predicativa)}
-\label{sub:filter}
-L'operatore \textsf{filter} seleziona un sottoinsieme degli elementi del flusso originale sulla base del soddisfacimento di una condizione booleana.
+Dal punto di vista concettuale, ogni stream può essere scomposto in tre componenti principali:
 
-\begin{definition}[Filter]
-Sia $p: A \to \mathbb{B}$ un predicato, dove $\mathbb{B} = \{\textsf{true}, \textsf{false}\}$. L'operatore $\textsf{filter}_p: \mathcal{S}(A) \to \mathcal{S}(A)$ preserva l'ordine degli elementi ed include l'elemento $a_i$ nel flusso di uscita se e solo se $p(a_i) = \textsf{true}$.
-\end{definition}
+\begin{enumerate}
+  \item una sorgente, generalmente costituita da una collezione o da un array;
+  \item una sequenza di operazioni intermedie (\texttt{map}, \texttt{filter},\texttt{flatMap},..)
+  \item un'operazione terminale
+\end{enumerate}
+
+La gerarchia di tipi esposta dall'API riflette direttamente questa struttura.
+L'utilizzo di trait sealed, tipi parametrici, tipi opachi e vincoli sui parametri
+di tipo permette di rappresentare a livello statico le proprietà della pipeline.
+In questo modo il compilatore Scala può guidare l'utente durante la costruzione dello
+stream e impedire le combinazioni non supportate.
+
+Allo stesso tempo, l'API mantiene un certo grado di estendibilità, in particolare
+consentendo all'utente di definire nuove operazioni terminali attraverso l'interfaccia
+dei collector.
+
+\subsection{Operazioni terminali}
+
+Le operazioni terminali sono rappresentate attraverso l'astrazione \texttt{Collector}. La sua definizione generale è:
+
+\begin{lstlisting}[language=Scala]
+trait Collector[E, B, R, S <: TerminationPolicy] extends CollectorBase[E, B, R]
+\end{lstlisting}
+
+I quattro parametri di tipo rappresentano rispettivamente:
 
 \begin{itemize}
-    \item \textbf{Firma e Tipo}: $\textsf{filter}: (A \to \mathbb{B}) \to (\mathcal{S}(A) \to \mathcal{S}(A))$
-    \item \textbf{Mappatura di Cardinalità}: $1 : \{0, 1\}$. Ogni elemento $a_i$ genera $1$ elemento se $p(a_i) = \textsf{true}$, e $0$ elementi (scarto) se $p(a_i) = \textsf{false}$.
-    \item \textbf{Proprietà Algebriche}: Operazione \emph{stateless}, locale, con conservazione dell'ordine relativo ($|\mathcal{S}(A)_{\text{out}}| \le |\mathcal{S}(A)_{\text{in}}|$).
+  \item \texttt{E}: il tipo degli elementi ricevuti dallo stream;
+  \item \texttt{B}: il tipo dello stato intermedio, o buffer, utilizzato durante l'accumulazione;
+  \item \texttt{R}: il tipo del risultato finale prodotto dal collector;
+  \item \texttt{S}: la politica di terminazione del collector.
 \end{itemize}
 
-\subsubsection{Limit (Troncamento del Flusso)}
-\label{sub:limit}
-L'operatore \textsf{limit} definisce una delimitazione posizionale sulla dimensione massima del flusso processato.\footnote{Se il troncamento è guidato da un predicato $p: A \to \mathbb{B}$ anziché da una dimensione fissa $n$, l'operatore assume la semantica di \textsf{takeWhile}.}
+Il comportamento fondamentale di un collector è definito da \texttt{CollectorBase}:
+\begin{lstlisting}[language=Scala]
+trait CollectorBase[E, B, R] {
+  def supplier(): B
+  def accumulator(buf: B, elem: E): Boolean
+  def finisher(buf: B): R
+}
+\end{lstlisting}
 
-\begin{definition}[Limit]
-Sia $n \in \mathbb{N}_0$ un intero non negativo indicante la cardinalità massima del flusso desiderato. L'operatore $\textsf{limit}_n: \mathcal{S}(A) \to \mathcal{S}(A)$ estrae il prefisso di lunghezza al più $n$ del flusso $\mathcal{S}(A)$, interrompendo la propagazione degli elementi successivi.
-\end{definition}
+Il metodo \texttt{supplier} crea lo stato iniziale utilizzato durante la raccolta,
+mentre \texttt{accumulator} aggiunge un nuovo elemento, il valore booleano restituito
+segnala che l'elaborazione può essere interrotta (si pensi a una findFirst).
+Infine, \texttt{finisher} trasforma lo stato intermedio nel risultato finale.
 
-\begin{itemize}
-    \item \textbf{Firma e Tipo}: $\textsf{limit}: \mathbb{N}_0 \to (\mathcal{S}(A) \to \mathcal{S}(A))$
-    \item \textbf{Mappatura di Cardinalità}: $1 : \{0, 1\}$ (dipendente dall'indice posizionale $i$). Per l'indice $i \le n$ la cardinalità è $1 : 1$, mentre per $i > n$ la cardinalità trasla a $1 : 0$.
-    \item \textbf{Proprietà Algebriche}: Operazione \emph{stateful} (richiede il mantenimento di un contatore interno dei messaggi) e con valutazione a corto circuito (\emph{short-circuiting}).
-\end{itemize}
+La politica di terminazione è rappresentata mediante la seguente gerarchia:
 
-\subsubsection{Skip (Scarto Posizionale Iniziale)}
-\label{sub:skip}
-L'operatore \textsf{skip} scarta i primi $n$ elementi dal flusso di input, lasciando passare inalterata la restante porzione della sequenza.\footnote{Nel caso in cui lo scarto sia basato su una condizione $p: A \to \mathbb{B}$, l'operatore assume la semantica di \textsf{dropWhile}.}
+\begin{lstlisting}[language=Scala]
+sealed trait TerminationPolicy
+sealed trait Exhaustive extends TerminationPolicy
+sealed trait ShortCircuiting extends TerminationPolicy
+\end{lstlisting}
 
-\begin{definition}[Skip]
-Sia $n \in \mathbb{N}_0$ un offset intero. L'operatore $\textsf{skip}_n: \mathcal{S}(A) \to \mathcal{S}(A)$ sopprime i primi $n$ elementi del flusso $\mathcal{S}(A)$ e propaga integralmente la sequenza a partire dall'elemento $(n+1)$-esimo.
-\end{definition}
+Un collector \texttt{Exhaustive} richiede l'elaborazione dell'intero upstream,
+mentre un collector \texttt{ShortCircuiting} può terminare non appena viene
+soddisfatta una determinata condizione.
 
-\begin{itemize}
-    \item \textbf{Firma e Tipo}: $\textsf{skip}: \mathbb{N}_0 \to (\mathcal{S}(A) \to \mathcal{S}(A))$
-    \item \textbf{Mappatura di Cardinalità}: $1 : \{0, 1\}$ (dipendente dall'indice posizionale $i$). Per l'indice $i \le n$ la cardinalità è $1 : 0$, mentre per $i > n$ diventa $1 : 1$.
-    \item \textbf{Proprietà Algebriche}: Operazione \emph{stateful} basata su un contatore transitorio.
-\end{itemize}
+Ad esempio, i collector \texttt{toList} e \texttt{findFirst} hanno rispettivamente
+i seguenti tipi:
 
-\subsection{FlatMap (Espansione Monadica e Appiattimento)}
-\label{sub:flatmap}
-L'operatore \textsf{flatMap} costituisce l'operatore di \emph{bind} monadico per la struttura dati stream, combinando una trasformazione $1 \to N$ con il successivo appiattimento (\emph{flattening}) delle sottosequenze generate.
+\begin{lstlisting}[language=Scala]
+def toList[T]: Collector[T, ListBuffer[T], List[T], Exhaustive]
+def findFirst[T]: Collector[T, OptionBuffer[T], Option[T], ShortCircuiting]
+\end{lstlisting}
 
-\begin{definition}[FlatMap]
-Sia $g: A \to \mathcal{S}(B)$ una funzione che associa ad ogni elemento di tipo $A$ un sotto-flusso di elementi di tipo $B$. L'operatore $\textsf{flatMap}_g: \mathcal{S}(A) \to \mathcal{S}(B)$ applica $g$ ad ogni elemento $a_i \in \mathcal{S}(A)$ e concatena sequenzialmente i flussi risultanti:
-\[
-\textsf{flatMap}_g(\langle a_1, a_2, \dots \rangle) = g(a_1) \mathbin{\Vert} g(a_2) \mathbin{\Vert} \dots
-\]
-dove $\mathbin{\Vert}$ rappresenta l'operatore di concatenazione ordinata tra flussi.
-\end{definition}
+Nel primo caso è necessario consumare tutti gli elementi dello stream prima di
+produrre la lista risultante. Nel secondo caso, invece, il primo elemento ricevuto
+è sufficiente a determinare il risultato e il collector può richiedere
+l'interruzione anticipata della pipeline.
+Questa proprietà viene codificata direttamente nel tipo del collector.
 
-\begin{itemize}
-    \item \textbf{Firma e Tipo}: $\textsf{flatMap}: (A \to \mathcal{S}(B)) \to (\mathcal{S}(A) \to \mathcal{S}(B))$
-    \item \textbf{Mappatura di Cardinalità}: $1 : N$, con $N \in \mathbb{N}_0 \cup \{\infty\}$. Ciascun elemento $a_i \in A$ genera un sotto-flusso $g(a_i)$ contenente da $0$ a $N$ elementi di tipo $B$.
-    \item \textbf{Proprietà Algebriche}: Corrisponde all'operatore \emph{Monadic Bind} ($\gg=$). Consente la variazione dinamica della struttura e della lunghezza complessiva del flusso.
-\end{itemize}
+\subsubsection{Collector combinabili e parallelismo}
+
+Per poter eseguire una riduzione in parallelo non è sufficiente che il collector
+sia esaustivo. Gli stati intermedi prodotti indipendentemente dalle diverse
+partizioni dello stream devono anche poter essere combinati, questa proprietà viene rappresentata dall'interfaccia:
+
+\begin{lstlisting}[language=Scala]
+trait Combinable[B] {
+  def combine(left: B, right: B): B
+}
+\end{lstlisting}
+
+Un collector utilizzabile come terminale di una pipeline parallela viene quindi definito come:
+
+\begin{lstlisting}[language=Scala]
+trait ParallelCollector[E, B, R]
+    extends Collector[E, B, R, Exhaustive]
+    with Combinable[B]
+\end{lstlisting}
+
+Il tipo \texttt{ParallelCollector} esprime pertanto staticamente due proprietà:
+
+\begin{enumerate}
+  \item la necessità di elaborare completamente lo stream;
+  \item la possibilità di combinare i risultati intermedi ottenuti da più worker.
+\end{enumerate}
+
+Il type system permette così di distinguere un collector genericamente valido in
+una pipeline sequenziale da un collector che possiede anche le proprietà
+necessarie per essere utilizzato in una pipeline parallela.
+
+\subsubsection{Collector specializzati}
+Alcune operazioni terminali particolarmente comuni dispongono di un trattamento
+specializzato da parte del compilatore di FusedStream. Due esempi sono
+\texttt{toArray} e \texttt{summing}:
+
+\begin{lstlisting}[language=Scala]
+opaque type ToArrayCollector[T] <: ParallelCollector
+opaque type SummingCollector[T <: Summable] <: ParallelCollector
+\end{lstlisting}
+
+I relativi metodi sono inoltre annotati con \texttt{@compileTimeOnly}:
+
+Questi collector non vengono utilizzati come normali implementazioni runtime di
+\texttt{Collector}. La loro presenza nella pipeline viene riconosciuta durante
+l'espansione della macro e utilizzata per selezionare una strategia di code
+generation dedicata.
+
+Il tipo opaco permette di esporre verso l'esterno soltanto le proprietà rilevanti
+del collector. Ad esempio, entrambi risultano essere sottotipi di
+\texttt{ParallelCollector}, rendendoli compatibili con le pipeline parallele,
+senza esporre all'utente i dettagli della strategia utilizzata internamente dal
+compilatore.
+
+La combinazione di tipi opachi e \texttt{@compileTimeOnly} permette quindi di
+utilizzare il tipo del collector come protocollo di comunicazione tra l'API
+pubblica e la macro di compilazione.
+
+Nel caso di \texttt{toArray}, il compilatore può generare direttamente una
+strategia di accumulazione specializzata evitando,
+quando possibile, boxing e chiamate indirette attraverso l'interfaccia
+\texttt{Collector}. Analogamente, \texttt{summing} può essere trasformato in una
+riduzione diretta.
+
+In questo modo l'API mantiene una sintassi uniforme:
+
+\begin{lstlisting}[language=Scala]
+stream.collect(Collector.toArray)
+stream.collect(Collector.summing)
+\end{lstlisting}
+
+pur consentendo al compilatore di generare implementazioni sostanzialmente
+differenti e specializzate per le singole operazioni terminali.
+
+\subsection{Creazione dello stream: \texttt{from}}
+
+La costruzione di una pipeline avviene a partire dal metodo \texttt{from}.
+Oltre a identificare la sorgente degli elementi, il tipo restituito da
+\texttt{from} determina quali modalità di esecuzione possono essere richieste
+successivamente.
+
+Non tutte le sorgenti possiedono infatti le caratteristiche necessarie per essere
+sruttate parallelamente. L'API rappresenta questa proprietà attraverso il tipo restituito:
+una sorgente per la quale è disponibile l'esecuzione parallela viene rappresentata
+come un \texttt{ParallelizableSource[A]}:
+
+\begin{lstlisting}[language=Scala]
+sealed trait ParallelizableSource[A]
+    extends SequentialStream[A] {
+
+  def parallel(): ParallelStream[A]
+}
+\end{lstlisting}
+
+Il metodo \texttt{parallel} non appartiene quindi genericamente a ogni
+\texttt{Stream}, ma solamente alle sorgenti per le quali la libreria dichiara
+esplicitamente il supporto alla parallelizzazione. Una pipeline costruita a partire da una sorgente non
+parallelizzabile non può essere convertita in una
+\texttt{ParallelStream}: l'operazione semplicemente non è disponibile nel tipo
+statico restituito all'utente.
+
+\subsection{Tipologie di stream}
+
+La modalità di esecuzione della pipeline è rappresentata attraverso una gerarchia
+di tipi \texttt{sealed}:
+
+\begin{lstlisting}[language=Scala]
+sealed trait Stream[A]
+sealed trait SequentialStream[A] extends Stream[A]
+sealed trait ParallelizableSource[A] extends SequentialStream[A]
+sealed trait ParallelStream[A]extends Stream[A]
+\end{lstlisting}
+
+\texttt{Stream[A]} rappresenta l'insieme minimo delle operazioni disponibili
+indipendentemente dalla modalità di esecuzione:
+
+\begin{lstlisting}[language=Scala]
+def filter(pred: A => Boolean): Stream[A]
+def map[B](f: A => B): Stream[B]
+def flatMap[B](f: A => SequentialStream[B]): Stream[B]
+\end{lstlisting}
+
+I sottotipi ridefiniscono (in maniera covariantemente) il tipo restituito dalle operazioni, ad esempio:
+
+\begin{lstlisting}[language=Scala]
+sealed trait ParallelStream[A] extends Stream[A] {
+  override def filter(pred: A => Boolean): ParallelStream[A]
+  override def map[B](f: A => B): ParallelStream[B]
+  override def flatMap[B](f: A => SequentialStream[B]): ParallelStream[B]
+}
+\end{lstlisting}
+
+Una chiamata a \texttt{map} su una \texttt{ParallelStream[A]} produce quindi una
+\texttt{ParallelStream[B]}, impedendo che l'informazione relativa alla modalità
+di esecuzione venga persa lungo la pipeline.
+
+Analogamente, una pipeline sequenziale:
+\begin{lstlisting}[language=Scala]
+sealed trait SequentialStream[A] extends Stream[A] {
+  override def filter(pred: A => Boolean): SequentialStream[A]
+  override def map[B](f: A => B): SequentialStream[B]
+  override def flatMap[B](f: A => SequentialStream[B]): SequentialStream[B]
+  // Non supportati in stream paralleli
+  def skip(n: Int): SequentialStream[A]
+  def limit(n: Int): SequentialStream[A]
+}
+\end{lstlisting}
+
+La posizione di \texttt{skip} e \texttt{limit} esclusivamente all'interno di
+\texttt{SequentialStream} garantisce che queste operazioni non
+risultuno disponibili su una \texttt{ParallelStream}.
+
+\subsection{Operazione terminale \texttt{collect}}
+
+L'operazione \texttt{collect} costituisce il punto nel quale la descrizione
+della pipeline viene trasformata nel codice che ne realizza l'esecuzione.
+
+La distinzione statica tra \texttt{SequentialStream} e \texttt{ParallelStream}
+permette di imporre requisiti differenti sul collector terminale.
+
+Una pipeline sequenziale può utilizzare genericamente un
+\texttt{Collector}, mentre una pipeline parallela richiede un
+\texttt{ParallelCollector}, cioè un collector esaustivo e dotato di una funzione
+di combinazione dello stato intermedio. Le firme corrispondono quindi a:
+
+\begin{lstlisting}[language=Scala]
+// Sequential stream
+collect(collector: Collector[E, B, R, S]): R
+
+// Parallel stream
+collect(collector: ParallelCollector[E, B, R]): R
+\end{lstlisting}
+
+Questa distinzione permette di rifiutare staticamente espressioni concettualmente
+non valide come l'utilizzo di un collector short-circuiting non combinabile come
+terminale di una pipeline parallela.
+
+Ad esempio, un'operazione come:
+
+\begin{lstlisting}[language=Scala]
+stream
+  .parallel()
+  .collect(Collector.findFirst)
+\end{lstlisting}
+
+non soddisfa il vincolo richiesto da \texttt{ParallelCollector}, poiché
+\texttt{findFirst} è tipato come:
+
+\begin{lstlisting}[language=Scala]
+Collector[
+  T,
+  OptionBuffer[T],
+  Option[T],
+  ShortCircuiting << non corretto
+]
+\end{lstlisting}
+
+Al contrario:
+
+\begin{lstlisting}[language=Scala]
+stream
+  .parallel()
+  .collect(Collector.toArray)
+\end{lstlisting}
+
+è accettabile perché \texttt{ToArrayCollector[T]} è dichiarato come sottotipo
+di \texttt{ParallelCollector}.
+
+\subsection{Configurazione compile-time e runtime}
+
+La libreria distingue tra due tipologie di configurazione:
+\texttt{CompileConfig}, relativa alle scelte che influenzano la generazione del
+codice, e \texttt{RuntimeConfig}, relativa ai parametri utilizzati durante
+l'esecuzione.
+
+Entrambe le configurazioni sono gestite tramite il meccanismo dei \texttt{given}
+di Scala. La libreria fornisce un comportamento di default, permettendo quindi
+di utilizzare FusedStream senza alcuna configurazione esplicita nei casi più
+comuni.
+
+Quando necessario, l'utente può comunque sovrascrivere i valori predefiniti
+fornendo una propria istanza \texttt{given} della configurazione desiderata nel
+contesto della pipeline.
+
+In questo modo l'API mantiene una configurazione implicita e poco invasiva,
+lasciando comunque la possibilità di personalizzare sia il comportamento in fase
+di compilazione sia quello in fase di esecuzione.
+
+\subsection{Import semplificato dell'API}
+Gli elementi dell'API pubblica vengono riesposti direttamente attraverso l'oggetto
+\texttt{FusedStream}.
+Questo permette di importare l'intera API necessaria con una singola istruzione:
+
+\begin{lstlisting}[language=Scala]
+import FusedStream.*
+\end{lstlisting}
+
+ottenendo così accesso sia alle funzioni per la costruzione delle pipeline sia ai
+collector terminali pronti all'uso. L'obiettivo è mantenere l'interfaccia compatta e immediata, evitando che l'utente
+debba conoscere o importare esplicitamente i diversi oggetti interni che compongono
+l'API.
 
 \section*{Sintesi delle Operazioni e Proprietà Algebriche}
 
 In Tabella~\ref{tab:stream_ops} viene riportato un quadro riassuntivo delle firme formali e delle caratteristiche strutturali delle operazioni analizzate.
 
 \begin{table}[h!]
-\centering
-\caption{Confronto formale delle operazioni trasformative su flussi di dati.}
-\label{tab:stream_ops}
-\vspace{2mm}
-\small
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Operazione} & \textbf{Firma di Dominio} & \textbf{Tipo di Trasformazione} & \textbf{Cardinalità ($1:M$)} & \textbf{Gestione Stato} \\
-\midrule
-\textsf{Map} & $A \to B$ & $\mathcal{S}(A) \to \mathcal{S}(B)$ & $1 : 1$ & Stateless \\
-\textsf{Filter} & $A \to \mathbb{B}$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateless \\
-\textsf{Limit} & $\mathbb{N}_0$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateful \\
-\textsf{Skip} & $\mathbb{N}_0$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateful \\
-\textsf{FlatMap} & $A \to \mathcal{S}(B)$ & $\mathcal{S}(A) \to \mathcal{S}(B)$ & $1 : N$ ($N \ge 0$) & Stateless / Contextual \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Confronto formale delle operazioni trasformative su flussi di dati.}
+  \label{tab:stream_ops}
+  \vspace{2mm}
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    \textbf{Operazione} & \textbf{Firma di Dominio} & \textbf{Tipo di Trasformazione} & \textbf{Cardinalità ($1:M$)} & \textbf{Gestione Stato} \\
+    \midrule
+    \textsf{Map} & $A \to B$ & $\mathcal{S}(A) \to \mathcal{S}(B)$ & $1 : 1$ & Stateless \\
+    \textsf{Filter} & $A \to \mathbb{B}$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateless \\
+    \textsf{Limit} & $\mathbb{N}_0$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateful \\
+    \textsf{Skip} & $\mathbb{N}_0$ & $\mathcal{S}(A) \to \mathcal{S}(A)$ & $1 : \{0,1\}$ & Stateful \\
+    \textsf{FlatMap} & $A \to \mathcal{S}(B)$ & $\mathcal{S}(A) \to \mathcal{S}(B)$ & $1 : N$ ($N \ge 0$) & Stateless / Contextual \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \section{Implmentazione}
@@ -391,7 +627,7 @@ algoritmo implementato (push stream)
 ottimizzazioni applicate ai parametri
 
 enrichement:
-  bubbling delle dichiarazioni
+bubbling delle dichiarazioni
 
 generazione di codice
 
@@ -410,35 +646,41 @@ FusedStream
 .limit(10)
 .toList()
 
-// Must be converted to 
+// Must be converted to
 
 i = 0
 j = 0
 
 for i in l:
-  if(i++ >= 3){
-    { <<< must inject condition on j too
-      k = 0
-      iter = IncIter( i* 10)
-      for ii in iter{
-        if(k++ >= 3){
-          break
-        }
-        --------- This get injectd into the flatMap ---------
-        if(j ++ >= 10){
-          break all
-        }
-          push(ii)
-        ---------
+if(i++ >= 3){
+  { <<< must inject condition on j too
+    k = 0
+    iter = IncIter( i* 10)
+    for ii in iter{
+      if(k++ >= 3){
+        break
       }
+      --------- This get injectd into the flatMap ---------
+      if(j ++ >= 10){
+        break all
+      }
+      push(ii)
+      ---------
     }
-
-      
   }
+
+}
 
 esampio estensione con collector utilizzando i trait
 
-\section{Testing}
+\section{Parsing}
+\section{Enrichment}
+\section{Traduzione in OPIr}
+\section{Lowering}
 
-\section{Retrospettiva}
+\section{Testing}
+\section{Benchmark}
+
+\chapter{Retrospettiva}
+\section{Utilizzo di LLM}
 \end{document}
