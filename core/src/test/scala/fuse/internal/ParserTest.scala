@@ -18,7 +18,7 @@ class ParserTest extends FunSuite {
   test("Parser analizza correttamente la catena stream.map(...).filter(...)") {
     withQuotes {
       val ir = new StreamIr()
-      val parser = Parser(ir, new FusedLogger(ir, CompileConfig(false, false))) // Assumendo che Parser accetti (ir)
+      val parser = Parser(ir, new FusedLogger(CompileConfig(false, false))) // Assumendo che Parser accetti (ir)
 
       // 1. Creiamo un'espressione quote che simula la catena stream.map(...).filter(...)
       val mockStreamExpr = '{
