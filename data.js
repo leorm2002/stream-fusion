@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789256914658,
+  "lastUpdate": 1789814815455,
   "repoUrl": "https://github.com/leorm2002/stream-fusion",
   "entries": {
     "Stream Fusion JMH": [
@@ -466,6 +466,162 @@ window.BENCHMARK_DATA = {
           {
             "name": "fuse.benchmarks.MegamorphicBenchmark.javaMonomorphic ( {\"size\":\"100000\"} )",
             "value": 99.53260132207187,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "leonardo.naddei@prometeia.com",
+            "name": "naddeil",
+            "username": "naddeil"
+          },
+          "committer": {
+            "email": "leonardo.naddei@prometeia.com",
+            "name": "naddeil",
+            "username": "naddeil"
+          },
+          "distinct": true,
+          "id": "2088fbc220c00575e2c3817158cdc9cda9cd5b94",
+          "message": "report",
+          "timestamp": "2026-09-19T12:40:30+02:00",
+          "tree_id": "dac25ee886a31f2ddecc9dc477f3815f3f35f789",
+          "url": "https://github.com/leorm2002/stream-fusion/commit/2088fbc220c00575e2c3817158cdc9cda9cd5b94"
+        },
+        "date": 1789814815425,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.fused ( {\"size\":\"1000\"} )",
+            "value": 1.0100523574145692,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.fused ( {\"size\":\"100000\"} )",
+            "value": 112.82665603486176,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.javaManual ( {\"size\":\"1000\"} )",
+            "value": 1.026476839966838,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.javaManual ( {\"size\":\"100000\"} )",
+            "value": 109.08554323842452,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.javaManualIndexed ( {\"size\":\"1000\"} )",
+            "value": 1.013710870897511,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.javaManualIndexed ( {\"size\":\"100000\"} )",
+            "value": 108.34557971966325,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.javaStream ( {\"size\":\"1000\"} )",
+            "value": 6.491637635934543,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.javaStream ( {\"size\":\"100000\"} )",
+            "value": 663.7986484471393,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.javaStreamOptimized ( {\"size\":\"1000\"} )",
+            "value": 4.945642818004618,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.javaStreamOptimized ( {\"size\":\"100000\"} )",
+            "value": 615.7478234345944,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.scalaManual ( {\"size\":\"1000\"} )",
+            "value": 3.754689472937303,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.scalaManual ( {\"size\":\"100000\"} )",
+            "value": 430.54295248277657,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.scalaStream ( {\"size\":\"1000\"} )",
+            "value": 7.989069023545957,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MapToListBenchmark.scalaStream ( {\"size\":\"100000\"} )",
+            "value": 772.4052788720063,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MegamorphicBenchmark.fusedMegamorphic ( {\"size\":\"1000\"} )",
+            "value": 0.8336214045990593,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MegamorphicBenchmark.fusedMegamorphic ( {\"size\":\"100000\"} )",
+            "value": 113.29083951747417,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MegamorphicBenchmark.javaManualIndexed ( {\"size\":\"1000\"} )",
+            "value": 0.8860501233028778,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MegamorphicBenchmark.javaManualIndexed ( {\"size\":\"100000\"} )",
+            "value": 112.94263336857775,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MegamorphicBenchmark.javaMegamorphic ( {\"size\":\"1000\"} )",
+            "value": 5.006248715081235,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MegamorphicBenchmark.javaMegamorphic ( {\"size\":\"100000\"} )",
+            "value": 407.77281041895895,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MegamorphicBenchmark.javaMonomorphic ( {\"size\":\"1000\"} )",
+            "value": 0.9906965737437768,
+            "unit": "us/op",
+            "extra": "iterations: 8\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "fuse.benchmarks.MegamorphicBenchmark.javaMonomorphic ( {\"size\":\"100000\"} )",
+            "value": 88.59807192394655,
             "unit": "us/op",
             "extra": "iterations: 8\nforks: 2\nthreads: 1"
           }
