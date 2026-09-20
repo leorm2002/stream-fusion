@@ -79,7 +79,8 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
       case Apply(Select(upstream, "limit"), List(n)) => appendLimit(parseTerm(upstream), n)
 
       /** ====================      (Map)      ==================== */
-      case Apply(TypeApply(Select(upstream, "map"), List(outType: TypeTree)), List(f)) => appendMap(parseTerm(upstream), f, outType)
+      case Apply(Apply(TypeApply(Select(upstream, "map"), List(outType: TypeTree)), List(f)), List(_)) => appendMap(parseTerm(upstream), f, outType)
+      case Apply(TypeApply(Select(upstream, "map"), List(outType: TypeTree)), List(f))                 => appendMap(parseTerm(upstream), f, outType)
 
       /** ====================      (FlatMap)  ==================== */
       case Apply(TypeApply(Select(upstream, "flatMap"), List(outType: TypeTree)), List(f)) => appendFlatMap(parseTerm(upstream), f, outType)

@@ -1339,4 +1339,16 @@ class E2eTests extends FunSuite {
     }
   }
 
+  test("FusedStream.map function cannot return a Stream") {
+
+    val errors = typeCheckErrors("""
+      val nums = List(1, 2, 3, 4, 5)
+      val found = FusedStream
+        .from(nums)
+        .map(x => FusedStream.of(x))
+        .collect(findFirst)""")
+
+    assert(errors.size == 1)
+    assert(errors.head.message.contains("map cannot return a FusedStream. Use flatMap instead."))
+  }
 }
