@@ -30,28 +30,17 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     debug(stream.asTerm.show)
     debug(stream.asTerm.show(using Printer.TreeStructure))
     val parsedTree = parseTerm(stream.asTerm)
+    val verifiedTree = parsedTree.verifiedAs[A](stream.asTerm.pos)
     debug("Stream body parsing done")
+
     // Extract the type parsed as the output and check for validity
-    // TODO:do we really need it? isn't alreadt guaranteed by the compilation
-    type ParsedOut = parsedTree.Out
-    given Type[ParsedOut] = parsedTree.outType
-    val actualType = TypeRepr.of[ParsedOut]
-    val expectedType = TypeRepr.of[A]
-    if (!(actualType =:= expectedType)) {
-      report.errorAndAbort(
-        s"""StreamFusion: parsed stream output type mismatchhh.
-         |Expected: ${expectedType.show}
-         |Found:    ${actualType.show}
-         |""".stripMargin,
-        stream.asTerm.pos
-      )
-    }
+
     debug("Starting to parse the terminal")
     val parsedCollector = extractCollectionStrategy(collector)
     debug("Terminal parsing done")
     debug("Parsing the done")
 
-    Ast(parsedTree.getCurrent(), parsedCollector, parsedTree.declarations, executionMode)
+    Ast(verifiedTree, parsedCollector, parsedTree.declarations, executionMode)
   }
 
   private def parseTerm(expr: ir.quotes.reflect.Term): ParsedTree = {
@@ -191,27 +180,11 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
         val innerStreamExpr: Expr[Stream[out]] = Expr.betaReduce { '{ $function($elemRef) } }
         // Once the inner stream is extracted we now parse it as a standalone stream
         val parsedInner = parseTerm(innerStreamExpr.asTerm)
-
-        // TODO: into a method
-        type InnerOutput = parsedInner.Out
-        given Type[InnerOutput] = parsedInner.outType
-
-        val expectedType = TypeRepr.of[out]
-        val actualType = TypeRepr.of[InnerOutput]
-
-        if (!(actualType =:= expectedType)) {
-          report.errorAndAbort(
-            s"""StreamFusion: flatMap inner stream output type mismatch.
-             |Expected: ${expectedType.show}
-             |Found:    ${actualType.show}
-             |""".stripMargin,
-            functionTerm.pos
-          )
-        }
+        val verifiedInnter = parsedInner.verifiedAs[out](innerStreamExpr.asTerm.pos)
 
         val flatMap = FlatMap[In, out](
           upstream = upstream.current, // keep the reference to the previous node
-          innerTree = parsedInner.getCurrent[out](), // The inner tree is the result of the parsing of the function
+          innerTree = verifiedInnter, // The inner tree is the result of the parsing of the function
           inType = upstream.outType, // The input of the flatmap is the output of the previous node
           outType = Type.of[out], // The outptu is out, the type of the domain of the function
           elemSymbol = flatMapBinder, // keep the reference to the binder, will be linked later to the previous step
@@ -317,6 +290,10 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     }
   }
 
+  case class ParsedTreeGen[A](
+      current: StreamTree[Phase.Raw, A],
+      outType: Type[A]
+  )
   private sealed trait ParsedTree {
     type Out
 
@@ -324,7 +301,21 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     val declarations: List[ir.quotes.reflect.Statement]
     final def outType: Type[Out] = current.outType
 
-    def getCurrent[A](): StreamTree[Phase.Raw, A] = { current.asInstanceOf[StreamTree[Phase.Raw, A]] }
+    def verifiedAs[A: Type](pos: ir.quotes.reflect.Position): StreamTree[Phase.Raw, A] = {
+      import ir.quotes.reflect.*
+      given Type[Out] = outType
+      val actual = TypeRepr.of[Out]
+      val expected = TypeRepr.of[A]
+      if (!(actual =:= expected))
+        report.errorAndAbort(
+          s"""StreamFusion: parsed stream output type mismatch.
+           |Expected: ${expected.show}
+           |Found:    ${actual.show}
+           |""".stripMargin,
+          pos
+        )
+      current.asInstanceOf[StreamTree[Phase.Raw, A]]
+    }
   }
 
   private final case class ParsedTreeImpl[A](current: StreamTree[Phase.Raw, A], declarations: List[ir.quotes.reflect.Statement]) extends ParsedTree {
