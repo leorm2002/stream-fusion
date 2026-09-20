@@ -1349,6 +1349,20 @@ class E2eTests extends FunSuite {
         .collect(findFirst)""")
 
     assert(errors.size == 1)
-    assert(errors.head.message.contains("map cannot return a FusedStream. Use flatMap instead."))
+    assert(errors.head.message.contains("Use flatMap instead."))
   }
+
+  test("FusedStream.flatMap function cannot contain a nested") {
+
+    val errors = typeCheckErrors("""
+      val nums = List(1, 2, 3, 4, 5)
+      val found = FusedStream
+        .from(nums)
+        .flatMap(x => FusedStream.of(FusedStream.of(x)))
+        .collect(findFirst)""")
+
+    assert(errors.size == 1)
+    assert(errors.head.message.contains("cannot contain another Stream as an element"))
+  }
+
 }

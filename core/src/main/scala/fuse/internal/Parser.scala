@@ -69,10 +69,9 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
 
       /** ====================      (Map)      ==================== */
       case Apply(Apply(TypeApply(Select(upstream, "map"), List(outType: TypeTree)), List(f)), List(_)) => appendMap(parseTerm(upstream), f, outType)
-      case Apply(TypeApply(Select(upstream, "map"), List(outType: TypeTree)), List(f))                 => appendMap(parseTerm(upstream), f, outType)
 
       /** ====================      (FlatMap)  ==================== */
-      case Apply(TypeApply(Select(upstream, "flatMap"), List(outType: TypeTree)), List(f)) => appendFlatMap(parseTerm(upstream), f, outType)
+      case Apply(Apply(TypeApply(Select(upstream, "flatMap"), List(outType: TypeTree)), List(f)), List(_)) => appendFlatMap(parseTerm(upstream), f, outType)
 
       /** ====================      (Parallel)  ==================== */
       case Apply(Select(upstream, "parallel"), _) => parseTerm(upstream) // it's used just for to type check the stream, all the information have already been used here

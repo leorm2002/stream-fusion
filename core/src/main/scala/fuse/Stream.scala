@@ -10,7 +10,7 @@ sealed trait Stream[A] {
 
   /** Performs a mapping of the element with the given function
     */
-  def map[B: NotAStream](f: A => B): Stream[B]
+  def map[B: NotMapToStream](f: A => B): Stream[B]
 
   /** By defining a FusedStream inside the flatMap function, you can perform a 1:N mapping (one-to-many).
     *
@@ -26,15 +26,15 @@ sealed trait Stream[A] {
     *   .collect(Collector.toList)
     * }}}
     */
-  def flatMap[B](f: A => SequentialStream[B]): Stream[B]
+  def flatMap[B: NotNestedStream](f: A => SequentialStream[B]): Stream[B]
 }
 
 sealed trait SequentialStream[A] extends Stream[A] {
   override def filter(pred: A => Boolean): SequentialStream[A]
 
-  override def map[B: NotAStream](f: A => B): SequentialStream[B]
+  override def map[B: NotMapToStream](f: A => B): SequentialStream[B]
 
-  override def flatMap[B](f: A => SequentialStream[B]): SequentialStream[B]
+  override def flatMap[B: NotNestedStream](f: A => SequentialStream[B]): SequentialStream[B]
 
   def skip(n: Int): SequentialStream[A]
 
@@ -58,17 +58,28 @@ sealed trait ParallelStream[A] extends Stream[A] {
 
   override def filter(pred: A => Boolean): ParallelStream[A]
 
-  override def map[B: NotAStream](f: A => B): ParallelStream[B]
+  override def map[B: NotMapToStream](f: A => B): ParallelStream[B]
 
-  override def flatMap[B](f: A => SequentialStream[B]): ParallelStream[B]
+  override def flatMap[B: NotNestedStream](f: A => SequentialStream[B]): ParallelStream[B]
 
 }
 
-@implicitNotFound("map cannot return a FusedStream. Use flatMap instead.")
+@implicitNotFound("The result of map cannot be a Stream. Use flatMap instead.")
 /** Any type that is not a Stream (or SequentialStream/ParallelizableSource/ParallelStream)
   */
-sealed trait NotAStream[T]
+sealed trait NotMapToStream[T]
 
-object NotAStream {
-  given [T](using NotGiven[T <:< Stream[?]]): NotAStream[T] = new NotAStream[T] {}
+object NotMapToStream {
+  given [T](using NotGiven[T <:< Stream[?]]): NotMapToStream[T] =
+    new NotMapToStream[T] {}
+}
+
+@implicitNotFound("A Stream cannot contain another Stream as an element.")
+/** Any type that is not a Stream of Stream (or SequentialStream/ParallelizableSource/ParallelStream)
+  */
+sealed trait NotNestedStream[T]
+
+object NotNestedStream {
+  given [T](using NotGiven[T <:< Stream[?]]): NotNestedStream[T] =
+    new NotNestedStream[T] {}
 }
