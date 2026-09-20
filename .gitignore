@@ -43,3 +43,6 @@ metals.sbt
 doc/*.pdf
 doc/pdfpages
 *.toc
+relazione/report.blg
+relazione/report.bbl
+relazione/report.toc

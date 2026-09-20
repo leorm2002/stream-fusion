@@ -1,0 +1,22 @@
+<mxfile host="65bd71144e">
+    <diagram id="D2WUQY0jqjqTvK-8e2He" name="Page-1">
+        <mxGraphModel dx="1784" dy="705" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="&amp;lt;&amp;lt;enum&amp;gt;&amp;gt;&lt;br&gt;Op" style="swimlane;fontStyle=0;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+                    <mxGeometry x="-300" y="180" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="&amp;lt;&amp;lt;&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;case&lt;/span&gt;&amp;gt;&amp;gt;&lt;br&gt;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;ArrayWrite[T]&lt;/span&gt;" style="swimlane;fontStyle=0;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+                    <mxGeometry x="-300" y="300" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="&amp;lt;&amp;lt;case&amp;gt;&amp;gt;&lt;br&gt;Declare[T]" style="swimlane;fontStyle=0;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+                    <mxGeometry x="-480" y="300" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="&amp;lt;&amp;lt;&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;case&lt;/span&gt;&amp;gt;&amp;gt;&lt;br&gt;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;Parallel[T]&lt;/span&gt;" style="swimlane;fontStyle=0;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+                    <mxGeometry x="-120" y="300" width="140" height="70" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

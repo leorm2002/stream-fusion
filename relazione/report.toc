@@ -1,36 +1,62 @@
 \babel@toc {italian}{}\relax 
 \babel@toc {italian}{}\relax 
-\contentsline {chapter}{\numberline {1}Metaprogrammazione e generazione statica del codice in Scala 3}{3}{chapter.1}%
-\contentsline {section}{\numberline {1.1}Multi-stage programming in Scala 3}{3}{section.1.1}%
-\contentsline {section}{\numberline {1.2}Metaprogrammazione generativa e analitica}{4}{section.1.2}%
-\contentsline {section}{\numberline {1.3}Dalle espressioni all'AST tipizzato}{4}{section.1.3}%
-\contentsline {section}{\numberline {1.4}Tipi staged e tipi riflessivi}{4}{section.1.4}%
-\contentsline {section}{\numberline {1.5}Beta reduction delle funzioni}{5}{section.1.5}%
-\contentsline {section}{\numberline {1.6}Simboli, variabili generate e hygiene}{6}{section.1.6}%
-\contentsline {chapter}{\numberline {2}Requirement specification}{7}{chapter.2}%
-\contentsline {subsection}{\numberline {2.0.1}Requisiti di business}{7}{subsection.2.0.1}%
-\contentsline {subsection}{\numberline {2.0.2}Modello di dominio}{7}{subsection.2.0.2}%
-\contentsline {subsection}{\numberline {2.0.3}Requisiti funzionali uente}{7}{subsection.2.0.3}%
-\contentsline {subsection}{\numberline {2.0.4}Requisiti funzionali di sistema}{7}{subsection.2.0.4}%
-\contentsline {subsection}{\numberline {2.0.5}Requisiti non funzionali}{7}{subsection.2.0.5}%
-\contentsline {subsection}{\numberline {2.0.6}Requisiti di implementazione}{7}{subsection.2.0.6}%
-\contentsline {chapter}{\numberline {3}Design architetturale}{8}{chapter.3}%
-\contentsline {chapter}{\numberline {4}Design di dettaglio}{9}{chapter.4}%
-\contentsline {section}{\numberline {4.1}Design dell'API pubblica}{9}{section.4.1}%
-\contentsline {subsection}{\numberline {4.1.1}Operazioni terminali}{9}{subsection.4.1.1}%
-\contentsline {subsubsection}{Collector combinabili e parallelismo}{10}{section*.3}%
-\contentsline {subsubsection}{Collector specializzati}{11}{section*.4}%
-\contentsline {subsection}{\numberline {4.1.2}Creazione dello stream: \texttt {from}}{11}{subsection.4.1.2}%
-\contentsline {subsection}{\numberline {4.1.3}Tipologie di stream}{11}{subsection.4.1.3}%
-\contentsline {subsection}{\numberline {4.1.4}Operazione terminale \texttt {collect}}{12}{subsection.4.1.4}%
-\contentsline {subsection}{\numberline {4.1.5}Configurazione compile-time e runtime}{13}{subsection.4.1.5}%
-\contentsline {subsection}{\numberline {4.1.6}Import semplificato dell'API}{13}{subsection.4.1.6}%
-\contentsline {section}{\numberline {4.2}Implmentazione}{13}{section.4.2}%
-\contentsline {section}{\numberline {4.3}Parsing}{14}{section.4.3}%
-\contentsline {section}{\numberline {4.4}Enrichment}{14}{section.4.4}%
-\contentsline {section}{\numberline {4.5}Traduzione in OPIr}{14}{section.4.5}%
-\contentsline {section}{\numberline {4.6}Lowering}{14}{section.4.6}%
-\contentsline {section}{\numberline {4.7}Testing}{14}{section.4.7}%
-\contentsline {section}{\numberline {4.8}Benchmark}{14}{section.4.8}%
-\contentsline {chapter}{\numberline {5}Retrospettiva}{15}{chapter.5}%
-\contentsline {section}{\numberline {5.1}Utilizzo di LLM}{15}{section.5.1}%
+\contentsline {chapter}{\numberline {1}Metaprogrammazione e generazione statica del codice in Scala 3}{4}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Multi-stage programming in Scala 3}{4}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Metaprogrammazione generativa e analitica}{5}{section.1.2}%
+\contentsline {section}{\numberline {1.3}Dalle espressioni all'AST tipizzato}{5}{section.1.3}%
+\contentsline {section}{\numberline {1.4}Tipi staged e tipi riflessivi}{6}{section.1.4}%
+\contentsline {section}{\numberline {1.5}Beta reduction delle funzioni}{6}{section.1.5}%
+\contentsline {section}{\numberline {1.6}Simboli, variabili generate e hygiene}{7}{section.1.6}%
+\contentsline {chapter}{\numberline {2}Analisi dei requisiti}{8}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Requisiti di business}{8}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Colmare il divario tra espressività e prestazioni}{8}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {2.1.2}Adozione a basso attrito}{8}{subsection.2.1.2}%
+\contentsline {section}{\numberline {2.2}Requisiti funzionali uente}{8}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}RFU-1 (Creazione dello Stream)}{8}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {2.2.2}RFU-2 (Composizione funzionale)}{8}{subsection.2.2.2}%
+\contentsline {subsection}{\numberline {2.2.3}RFU-3 (Esecuzione parallela esplicita)}{9}{subsection.2.2.3}%
+\contentsline {subsection}{\numberline {2.2.4}RFU-4 (Raccolta dei risultati)}{9}{subsection.2.2.4}%
+\contentsline {subsection}{\numberline {2.2.5}RFU-5 (Configurazione)}{9}{subsection.2.2.5}%
+\contentsline {subsubsection}{RFU-6 (Guida contestuale tramite Type System)}{9}{section*.3}%
+\contentsline {section}{\numberline {2.3}Requisiti funzionali di sistema}{9}{section.2.3}%
+\contentsline {subsection}{\numberline {2.3.1}Requisiti negativi ed esclusioni (Out of Scope)}{10}{subsection.2.3.1}%
+\contentsline {section}{\numberline {2.4}Requisiti non funzionali}{10}{section.2.4}%
+\contentsline {subsubsection}{RNF-1 (Prestazioni a runtime)}{10}{section*.4}%
+\contentsline {subsubsection}{RNF-2 (Allocazione di memoria zero-overhead)}{11}{section*.5}%
+\contentsline {subsubsection}{RNF-3 (Type Safety statica e Guida del Compilatore)}{11}{section*.6}%
+\contentsline {subsubsection}{RNF-4 (Igiene delle Macro)}{11}{section*.7}%
+\contentsline {chapter}{\numberline {3}Analisi tecnica}{12}{chapter.3}%
+\contentsline {chapter}{\numberline {4}Design}{13}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Architettura}{13}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Design dell'API pubblica}{14}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}Operazioni terminali}{14}{subsection.4.2.1}%
+\contentsline {subsubsection}{Collector combinabili e parallelismo}{15}{section*.9}%
+\contentsline {subsubsection}{Collector specializzati}{16}{section*.10}%
+\contentsline {subsection}{\numberline {4.2.2}Creazione dello stream: \texttt {from}}{16}{subsection.4.2.2}%
+\contentsline {subsection}{\numberline {4.2.3}Tipologie di stream}{16}{subsection.4.2.3}%
+\contentsline {subsection}{\numberline {4.2.4}Operazione terminale \texttt {collect}}{17}{subsection.4.2.4}%
+\contentsline {subsection}{\numberline {4.2.5}Configurazione compile-time e runtime}{18}{subsection.4.2.5}%
+\contentsline {subsection}{\numberline {4.2.6}Import semplificato dell'API}{19}{subsection.4.2.6}%
+\contentsline {section}{\numberline {4.3}Design della Stream IR}{19}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Struttura dell'albero}{20}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Rappresentazione di \texttt {flatMap}}{20}{subsection.4.3.2}%
+\contentsline {section}{\numberline {4.4}Rappresentazione per la Code Generation}{22}{section.4.4}%
+\contentsline {subsection}{\numberline {4.4.1}Valori}{22}{subsection.4.4.1}%
+\contentsline {subsection}{\numberline {4.4.2}Operazioni}{23}{subsection.4.4.2}%
+\contentsline {chapter}{\numberline {5}Sviluppo}{25}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Parsing}{25}{section.5.1}%
+\contentsline {subsection}{\numberline {5.1.1}Parsing della stream}{25}{subsection.5.1.1}%
+\contentsline {subsubsection}{Rappresentazione dei nodi: ParsedTree}{27}{section*.11}%
+\contentsline {subsubsection}{Il riconoscimento delle espressioni}{27}{section*.12}%
+\contentsline {subsubsection}{Esempi di parsing specifico: filter}{28}{section*.13}%
+\contentsline {subsubsection}{Esempi di parsing specifico: flatMap}{28}{section*.14}%
+\contentsline {subsection}{\numberline {5.1.2}Collector}{29}{subsection.5.1.2}%
+\contentsline {subsubsection}{La collection strategy}{29}{section*.15}%
+\contentsline {subsubsection}{Parsing del collector}{30}{section*.16}%
+\contentsline {subsection}{\numberline {5.1.3}Parsing della configurazione statica}{30}{subsection.5.1.3}%
+\contentsline {section}{\numberline {5.2}Enrichment}{31}{section.5.2}%
+\contentsline {section}{\numberline {5.3}Traduzione in OPIr}{31}{section.5.3}%
+\contentsline {section}{\numberline {5.4}Lowering}{31}{section.5.4}%
+\contentsline {section}{\numberline {5.5}Testing}{31}{section.5.5}%
+\contentsline {section}{\numberline {5.6}Benchmark}{31}{section.5.6}%
+\contentsline {chapter}{\numberline {6}Retrospettiva}{32}{chapter.6}%
