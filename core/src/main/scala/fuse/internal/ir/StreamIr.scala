@@ -65,7 +65,7 @@ private[internal] class StreamIr(using val quotes: Quotes) {
   )
 
   /** When present indicates that the node has a predecessor, only the root nodes are not WithUpstream */
-  trait WithUpstream[P <: Phase, A] {
+  sealed trait WithUpstream[P <: Phase, A] {
     def upstream: StreamTree[P, A]
   }
 

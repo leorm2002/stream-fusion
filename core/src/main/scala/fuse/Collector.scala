@@ -21,7 +21,7 @@ trait Combinable[B] {
   def combine(left: B, right: B): B
 }
 
-trait CollectorBase[E, B, R] {
+sealed trait CollectorBase[E, B, R] {
   def supplier(): B
   def accumulator(buf: B, E: E): Boolean
   def finisher(buf: B): R

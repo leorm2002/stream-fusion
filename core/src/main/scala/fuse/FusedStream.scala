@@ -52,6 +52,7 @@ object FusedStream {
 
   // Ready-to-use terminal collectors:
   // toList, toSet, findFirst, toArray, summing
+  export fuse.FusedStream
   export Collector.{toList, toSet, findFirst}
 
   @compileTimeOnly("FusedStream.toArray can only be used as a FusedStream terminal collector")
