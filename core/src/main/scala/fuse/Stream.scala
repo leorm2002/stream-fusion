@@ -1,7 +1,6 @@
 package fuse
-
-
-// Represents the possible operations on the stream
+import scala.util.NotGiven
+import scala.annotation.implicitNotFound
 
 sealed trait Stream[A] {
 
@@ -11,7 +10,7 @@ sealed trait Stream[A] {
 
   /** Performs a mapping of the element with the given function
     */
-  def map[B](f: A => B): Stream[B]
+  def map[B: NotAStream](f: A => B): Stream[B]
 
   /** By defining a FusedStream inside the flatMap function, you can perform a 1:N mapping (one-to-many).
     *
@@ -33,7 +32,7 @@ sealed trait Stream[A] {
 sealed trait SequentialStream[A] extends Stream[A] {
   override def filter(pred: A => Boolean): SequentialStream[A]
 
-  override def map[B](f: A => B): SequentialStream[B]
+  override def map[B: NotAStream](f: A => B): SequentialStream[B]
 
   override def flatMap[B](f: A => SequentialStream[B]): SequentialStream[B]
 
@@ -59,8 +58,17 @@ sealed trait ParallelStream[A] extends Stream[A] {
 
   override def filter(pred: A => Boolean): ParallelStream[A]
 
-  override def map[B](f: A => B): ParallelStream[B]
+  override def map[B: NotAStream](f: A => B): ParallelStream[B]
 
   override def flatMap[B](f: A => SequentialStream[B]): ParallelStream[B]
 
+}
+
+@implicitNotFound("map cannot return a FusedStream. Use flatMap instead.")
+/** Any type that is not a Stream (or SequentialStream/ParallelizableSource/ParallelStream)
+  */
+sealed trait NotAStream[T]
+
+object NotAStream {
+  given [T](using NotGiven[T <:< Stream[?]]): NotAStream[T] = new NotAStream[T] {}
 }
