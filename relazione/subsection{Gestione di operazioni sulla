@@ -1,0 +1,160 @@
+\subsection{Gestione di operazioni sulla cardinalità}
+
+Una delle principali difficoltà associate al modello \emph{push} riguarda la gestione degli operatori che modificano la cardinalità della stream.
+Si consideri, ad esempio, la seguente pipeline:
+
+\begin{lstlisting}[language=Scala]
+FusedStream.of(iter)
+  .map(f)
+  .skip(2)
+  .filter(x => x > threshold)
+  .limit(4)
+  .collect(collector)
+\end{lstlisting}
+
+Una sua implementazione imperativa naturale può essere ricondotta concettualmente al seguente codice:
+
+\begin{lstlisting}[language=Scala]
+var skippedCounter = 0
+var limitedCounter = 0
+val iterator = iter.iterator
+
+while (iterator.hasNext && limitedCounter < 4) {
+  val i = iterator.next()
+  val mappedI = f(i)
+
+  if (skippedCounter >= 2) {
+    if (mappedI > threshold) {
+      collector(mappedI)
+      limitedCounter += 1
+    }
+  }
+  skippedCounter++
+}
+\end{lstlisting}
+
+Gli operatori \texttt{skip} e \texttt{limit} richiedono la materializzazione di uno stato persistente tra le diverse iterazioni del ciclo.
+
+\texttt{skip} non modifica la condizione di prosecuzione della sorgente. Gli elementi iniziali devono comunque essere prodotti e attraversare tutti gli operatori posti a monte, poiché è proprio la loro osservazione a permettere l'avanzamento del contatore.
+
+Il comportamento di \texttt{limit} è differente. Una volta raggiunto il numero richiesto di elementi non è più necessario interrogare la sorgente. L'operatore può pertanto contribuire direttamente alla condizione di prosecuzione del ciclo.
+
+Indicando con \(l\) il contatore associato a \texttt{limit} e con \(n\) il limite richiesto, viene introdotta la condizione
+
+$$
+l < n.
+$$
+
+Se \(C_{\mathrm{source}}\) rappresenta la condizione originaria necessaria alla sorgente per produrre un nuovo elemento, la condizione complessiva del ciclo diventa:
+
+$$
+C_{\mathrm{loop}}
+=
+C_{\mathrm{source}}
+\land
+(l < n).
+$$
+
+Il contatore \(l\) deve essere incrementato esclusivamente quando un elemento raggiunge effettivamente tale operatore. La posizione degli operatori nella pipeline risulta quindi semanticamente rilevante.
+
+In questo modo la modifica della cardinalità non richiede la costruzione di stream o iteratori intermedi, ma viene espressa direttamente mediante variabili di stato e strutture di controllo all'interno dell'unico ciclo generato.
+
+In particolare, durante l'espansione della macro, gli operatori \texttt{skip} e \texttt{limit} portano a:
+
+\begin{enumerate}
+  \item viene materializzato il valore associato all'operatore in una variabile immutabile. In questo modo l'espressione corrispondente viene valutata una sola volta prima dell'inizio dell'iterazione;
+  \item viene introdotta una variabile mutabile che mantiene il contatore associato all'operatore;
+  \item nel caso di \texttt{limit}, la condizione sul contatore viene aggiunta alla condizione di prosecuzione del \texttt{while}; nel caso di \texttt{skip}, la condizione viene invece inserita nel corpo del ciclo, impedendo temporaneamente la propagazione dell'elemento agli operatori successivi;
+  \item gli incrementi dei rispettivi contatori vengono inseriti nel punto della pipeline in cui l'elemento attraversa semanticamente l'operatore.
+\end{enumerate}
+
+In forma schematica, un \texttt{limit(n)} contribuisce quindi alla generazione di una struttura del tipo
+
+\begin{lstlisting}[language=Scala]
+val limitValue = n
+var limitCounter = 0
+
+while (sourceCondition && limitCounter < limitValue) {
+// ...
+limitCounter += 1
+}
+\end{lstlisting}
+
+mentre uno \texttt{skip(n)} viene ricondotto a una struttura del tipo
+
+\begin{lstlisting}[language=Scala]
+val skipValue = n
+var skipCounter = 0
+
+while (sourceCondition) {
+// ...
+
+if (skipCounter >= skipValue) {
+  // operatori successivi
+  }
+  skipCounter += 1
+}
+\end{lstlisting}
+
+La presenza di operatori che introducono nuovi livelli di iterazione (\texttt{flatMap}), richiede che i vincoli di produzione vengano propagati fino al ciclo a cui si riferiscono effettivamente.
+
+Si consideri, ad esempio, la pipeline:
+
+\begin{lstlisting}[language=Scala]
+FusedStream
+.of(iter)
+.map(f)
+.skip(3)
+.flatMap(x => repeat(x, 2).map(_ * 10).limit(3))
+.limit(10)
+.collect(collector)
+\end{lstlisting}
+
+L'operatore \texttt{flatMap} introduce per ogni elemento della stream esterna una nuova stream, e quindi un secondo livello di iterazione. Il \texttt{limit(4)} è posto a valle del \texttt{flatMap}: il limite si riferisce pertanto agli elementi prodotti dalla stream interna, non agli elementi letti dalla sorgente esterna.
+
+Una traduzione semplificata della pipeline assume quindi la forma:
+
+\begin{lstlisting}[language=Scala]
+val skipValue = 3
+var skipCounter = 0
+
+val limitValue = 10
+var limitCounter = 0
+
+while (outerCondition && limitCounter < limitValue) {
+val i = readOuter()
+val x = f(i)
+
+  if (skipCounter >= skipValue) {
+    val inner = repeat(x, 2)
+    var j = 0
+
+    ```
+    val limitValue2 = 3
+    var limitCounter2 = 0
+
+    while (j < inner.length && limitCounter < limitValue && limitCounter2 < limitValue2) {
+      val value = inner(j)
+      val mappedValue = value * 10
+
+      collector(mappedValue)
+      limitCounter2 += 1
+      limitCounter += 1
+      j += 1
+    }
+    ```
+  }
+skipCounter += 1
+
+}
+\end{lstlisting}
+
+La condizione associata a \texttt{limit} compare quindi sia nel ciclo esterno sia nel ciclo introdotto dal \texttt{flatMap} assieme alla condizione propria della flatMap. Nel ciclo interno impedisce la produzione di ulteriori elementi non appena viene raggiunta la cardinalità richiesta; nel ciclo esterno evita invece che venga richiesto un nuovo elemento alla sorgente quando la pipeline ha già prodotto tutti gli elementi necessari.
+
+\begin{lstlisting}[language=Scala]
+_ * 10
+\end{lstlisting}
+
+deve essere valutata esattamente quattro volte. Limitarsi ad applicare il controllo del \texttt{limit} al solo ciclo esterno permetterebbe infatti al ciclo generato da \texttt{flatMap} di continuare a produrre e trasformare elementi che verrebbero successivamente scartati.
+
+In termini più generali, le condizioni che limitano la produzione vengono quindi propagate attraverso i livelli di iterazione generati dalla pipeline fino al punto più interno.

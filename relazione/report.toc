@@ -1,62 +1,102 @@
 \babel@toc {italian}{}\relax 
 \babel@toc {italian}{}\relax 
-\contentsline {chapter}{\numberline {1}Metaprogrammazione e generazione statica del codice in Scala 3}{4}{chapter.1}%
-\contentsline {section}{\numberline {1.1}Multi-stage programming in Scala 3}{4}{section.1.1}%
-\contentsline {section}{\numberline {1.2}Metaprogrammazione generativa e analitica}{5}{section.1.2}%
-\contentsline {section}{\numberline {1.3}Dalle espressioni all'AST tipizzato}{5}{section.1.3}%
-\contentsline {section}{\numberline {1.4}Tipi staged e tipi riflessivi}{6}{section.1.4}%
-\contentsline {section}{\numberline {1.5}Beta reduction delle funzioni}{6}{section.1.5}%
-\contentsline {section}{\numberline {1.6}Simboli, variabili generate e hygiene}{7}{section.1.6}%
-\contentsline {chapter}{\numberline {2}Analisi dei requisiti}{8}{chapter.2}%
-\contentsline {section}{\numberline {2.1}Requisiti di business}{8}{section.2.1}%
-\contentsline {subsection}{\numberline {2.1.1}Colmare il divario tra espressività e prestazioni}{8}{subsection.2.1.1}%
-\contentsline {subsection}{\numberline {2.1.2}Adozione a basso attrito}{8}{subsection.2.1.2}%
-\contentsline {section}{\numberline {2.2}Requisiti funzionali uente}{8}{section.2.2}%
-\contentsline {subsection}{\numberline {2.2.1}RFU-1 (Creazione dello Stream)}{8}{subsection.2.2.1}%
-\contentsline {subsection}{\numberline {2.2.2}RFU-2 (Composizione funzionale)}{8}{subsection.2.2.2}%
-\contentsline {subsection}{\numberline {2.2.3}RFU-3 (Esecuzione parallela esplicita)}{9}{subsection.2.2.3}%
-\contentsline {subsection}{\numberline {2.2.4}RFU-4 (Raccolta dei risultati)}{9}{subsection.2.2.4}%
-\contentsline {subsection}{\numberline {2.2.5}RFU-5 (Configurazione)}{9}{subsection.2.2.5}%
-\contentsline {subsubsection}{RFU-6 (Guida contestuale tramite Type System)}{9}{section*.3}%
-\contentsline {section}{\numberline {2.3}Requisiti funzionali di sistema}{9}{section.2.3}%
-\contentsline {subsection}{\numberline {2.3.1}Requisiti negativi ed esclusioni (Out of Scope)}{10}{subsection.2.3.1}%
-\contentsline {section}{\numberline {2.4}Requisiti non funzionali}{10}{section.2.4}%
-\contentsline {subsubsection}{RNF-1 (Prestazioni a runtime)}{10}{section*.4}%
-\contentsline {subsubsection}{RNF-2 (Allocazione di memoria zero-overhead)}{11}{section*.5}%
-\contentsline {subsubsection}{RNF-3 (Type Safety statica e Guida del Compilatore)}{11}{section*.6}%
-\contentsline {subsubsection}{RNF-4 (Igiene delle Macro)}{11}{section*.7}%
-\contentsline {chapter}{\numberline {3}Analisi tecnica}{12}{chapter.3}%
-\contentsline {chapter}{\numberline {4}Design}{13}{chapter.4}%
-\contentsline {section}{\numberline {4.1}Architettura}{13}{section.4.1}%
-\contentsline {section}{\numberline {4.2}Design dell'API pubblica}{14}{section.4.2}%
-\contentsline {subsection}{\numberline {4.2.1}Operazioni terminali}{14}{subsection.4.2.1}%
-\contentsline {subsubsection}{Collector combinabili e parallelismo}{15}{section*.9}%
-\contentsline {subsubsection}{Collector specializzati}{16}{section*.10}%
-\contentsline {subsection}{\numberline {4.2.2}Creazione dello stream: \texttt {from}}{16}{subsection.4.2.2}%
-\contentsline {subsection}{\numberline {4.2.3}Tipologie di stream}{16}{subsection.4.2.3}%
-\contentsline {subsection}{\numberline {4.2.4}Operazione terminale \texttt {collect}}{17}{subsection.4.2.4}%
-\contentsline {subsection}{\numberline {4.2.5}Configurazione compile-time e runtime}{18}{subsection.4.2.5}%
-\contentsline {subsection}{\numberline {4.2.6}Import semplificato dell'API}{19}{subsection.4.2.6}%
-\contentsline {section}{\numberline {4.3}Design della Stream IR}{19}{section.4.3}%
-\contentsline {subsection}{\numberline {4.3.1}Struttura dell'albero}{20}{subsection.4.3.1}%
-\contentsline {subsection}{\numberline {4.3.2}Rappresentazione di \texttt {flatMap}}{20}{subsection.4.3.2}%
-\contentsline {section}{\numberline {4.4}Rappresentazione per la Code Generation}{22}{section.4.4}%
-\contentsline {subsection}{\numberline {4.4.1}Valori}{22}{subsection.4.4.1}%
-\contentsline {subsection}{\numberline {4.4.2}Operazioni}{23}{subsection.4.4.2}%
-\contentsline {chapter}{\numberline {5}Sviluppo}{25}{chapter.5}%
-\contentsline {section}{\numberline {5.1}Parsing}{25}{section.5.1}%
-\contentsline {subsection}{\numberline {5.1.1}Parsing della stream}{25}{subsection.5.1.1}%
-\contentsline {subsubsection}{Rappresentazione dei nodi: ParsedTree}{27}{section*.11}%
-\contentsline {subsubsection}{Il riconoscimento delle espressioni}{27}{section*.12}%
-\contentsline {subsubsection}{Esempi di parsing specifico: filter}{28}{section*.13}%
-\contentsline {subsubsection}{Esempi di parsing specifico: flatMap}{28}{section*.14}%
-\contentsline {subsection}{\numberline {5.1.2}Collector}{29}{subsection.5.1.2}%
-\contentsline {subsubsection}{La collection strategy}{29}{section*.15}%
-\contentsline {subsubsection}{Parsing del collector}{30}{section*.16}%
-\contentsline {subsection}{\numberline {5.1.3}Parsing della configurazione statica}{30}{subsection.5.1.3}%
-\contentsline {section}{\numberline {5.2}Enrichment}{31}{section.5.2}%
-\contentsline {section}{\numberline {5.3}Traduzione in OPIr}{31}{section.5.3}%
-\contentsline {section}{\numberline {5.4}Lowering}{31}{section.5.4}%
-\contentsline {section}{\numberline {5.5}Testing}{31}{section.5.5}%
-\contentsline {section}{\numberline {5.6}Benchmark}{31}{section.5.6}%
-\contentsline {chapter}{\numberline {6}Retrospettiva}{32}{chapter.6}%
+\contentsline {chapter}{\numberline {1}Analisi dei requisiti}{5}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Requisiti di business}{5}{section.1.1}%
+\contentsline {subsection}{\numberline {1.1.1}RB-1 Colmare il divario tra espressività e prestazioni}{5}{subsection.1.1.1}%
+\contentsline {subsection}{\numberline {1.1.2}RB-2 Adozione a basso attrito}{5}{subsection.1.1.2}%
+\contentsline {section}{\numberline {1.2}Requisiti funzionali uente}{5}{section.1.2}%
+\contentsline {subsection}{\numberline {1.2.1}RFU-1 (Creazione dello Stream)}{5}{subsection.1.2.1}%
+\contentsline {subsection}{\numberline {1.2.2}RFU-2 (Configurazione)}{5}{subsection.1.2.2}%
+\contentsline {subsection}{\numberline {1.2.3}RFU-3 (Esecuzione parallela esplicita)}{5}{subsection.1.2.3}%
+\contentsline {subsection}{\numberline {1.2.4}RFU-4 (Raccolta dei risultati)}{6}{subsection.1.2.4}%
+\contentsline {subsection}{\numberline {1.2.5}RFU-5 (Guida contestuale tramite Type System)}{6}{subsection.1.2.5}%
+\contentsline {section}{\numberline {1.3}Requisiti funzionali di sistema}{6}{section.1.3}%
+\contentsline {subsection}{\numberline {1.3.1}RFS-1 (Riconoscimento e analisi della pipeline statica)}{6}{subsection.1.3.1}%
+\contentsline {subsection}{\numberline {1.3.2}RFS-2 (Fusione delle operazioni sequenziali)}{6}{subsection.1.3.2}%
+\contentsline {subsection}{\numberline {1.3.3}RFS-3 (Generazione di codice specializzato)}{6}{subsection.1.3.3}%
+\contentsline {subsection}{\numberline {1.3.4}RFS-4 (Gestione del flusso e terminazione anticipata)}{6}{subsection.1.3.4}%
+\contentsline {subsection}{\numberline {1.3.5}RFS-5 (Composizione di flussi annidati)}{6}{subsection.1.3.5}%
+\contentsline {subsection}{\numberline {1.3.6}RFS-6 (Supporto all'esecuzione parallela)}{6}{subsection.1.3.6}%
+\contentsline {section}{\numberline {1.4}Requisiti negativi ed esclusioni (Out of Scope)}{7}{section.1.4}%
+\contentsline {subsection}{\numberline {1.4.1}RN-1 (Assenza di composizione dinamica runtime)}{7}{subsection.1.4.1}%
+\contentsline {subsection}{\numberline {1.4.2}RN-2 (Nessuna ottimizzazione opaca sul codice utente)}{7}{subsection.1.4.2}%
+\contentsline {subsection}{\numberline {1.4.3}RN-3 (Nessun supporto a backtracking o accesso casuale)}{7}{subsection.1.4.3}%
+\contentsline {subsection}{\numberline {1.4.4}RN-4 (Nessun supporto a flussi annidati di stream)}{7}{subsection.1.4.4}%
+\contentsline {subsection}{\numberline {1.4.5}RN-5 (Nessun fall-back silente a runtime)}{7}{subsection.1.4.5}%
+\contentsline {subsection}{\numberline {1.4.6}RN-6 (Nessun inlining o ottimizzazione per funzioni non-lambda)}{7}{subsection.1.4.6}%
+\contentsline {section}{\numberline {1.5}Requisiti non funzionali}{7}{section.1.5}%
+\contentsline {subsection}{\numberline {1.5.1}RNF-1 (Prestazioni a runtime)}{7}{subsection.1.5.1}%
+\contentsline {subsection}{\numberline {1.5.2}RNF-2 (Assenza di allocazioni intermedie)}{7}{subsection.1.5.2}%
+\contentsline {subsection}{\numberline {1.5.3}RNF-3 (Preservazione della semantica)}{8}{subsection.1.5.3}%
+\contentsline {chapter}{\numberline {2}Background e tecnologie abilitanti}{9}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Stream fusion}{9}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Push stream}{9}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {2.1.2}Pull stream}{10}{subsection.2.1.2}%
+\contentsline {section}{\numberline {2.2}Multi-stage programming in Scala 3}{10}{section.2.2}%
+\contentsline {section}{\numberline {2.3}Metaprogrammazione generativa e analitica}{11}{section.2.3}%
+\contentsline {section}{\numberline {2.4}Dalle espressioni all'AST tipizzato}{11}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Tipi staged e tipi riflessivi}{11}{section.2.5}%
+\contentsline {section}{\numberline {2.6}Beta reduction delle funzioni}{12}{section.2.6}%
+\contentsline {section}{\numberline {2.7}Simboli, variabili generate e hygiene}{13}{section.2.7}%
+\contentsline {chapter}{\numberline {3}Design architetturale}{14}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Architettura generale}{14}{section.3.1}%
+\contentsline {section}{\numberline {3.2}Componenti del sistema}{14}{section.3.2}%
+\contentsline {subsection}{\numberline {3.2.1}Public API e DSL}{15}{subsection.3.2.1}%
+\contentsline {subsection}{\numberline {3.2.2}Macro Entry Point}{15}{subsection.3.2.2}%
+\contentsline {subsection}{\numberline {3.2.3}Parser}{15}{subsection.3.2.3}%
+\contentsline {subsection}{\numberline {3.2.4}Stream IR}{16}{subsection.3.2.4}%
+\contentsline {subsection}{\numberline {3.2.5}Enrichment}{16}{subsection.3.2.5}%
+\contentsline {subsection}{\numberline {3.2.6}OP IR Generator}{16}{subsection.3.2.6}%
+\contentsline {subsection}{\numberline {3.2.7}Lowering e Code Generator}{16}{subsection.3.2.7}%
+\contentsline {section}{\numberline {3.3}Architettura del compilatore}{17}{section.3.3}%
+\contentsline {section}{\numberline {3.4}Architettura runtime}{18}{section.3.4}%
+\contentsline {subsection}{\numberline {3.4.1}Il modello scelto}{18}{subsection.3.4.1}%
+\contentsline {subsubsection}{Sintesi delle Operazioni supportate}{18}{section*.3}%
+\contentsline {subsection}{\numberline {3.4.2}Il runtime parallelo}{18}{subsection.3.4.2}%
+\contentsline {subsubsection}{Operazioni possibili con stream parallele}{18}{section*.4}%
+\contentsline {chapter}{\numberline {4}Design di dettaglio}{19}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Design dell'API pubblica}{19}{section.4.1}%
+\contentsline {subsection}{\numberline {4.1.1}Operazioni terminali}{19}{subsection.4.1.1}%
+\contentsline {subsubsection}{Collector combinabili e parallelismo}{21}{section*.5}%
+\contentsline {subsubsection}{Collector specializzati}{21}{section*.6}%
+\contentsline {subsection}{\numberline {4.1.2}Creazione dello stream: \texttt {from}}{22}{subsection.4.1.2}%
+\contentsline {subsection}{\numberline {4.1.3}Tipologie di stream}{22}{subsection.4.1.3}%
+\contentsline {subsection}{\numberline {4.1.4}Operazione terminale \texttt {collect}}{23}{subsection.4.1.4}%
+\contentsline {subsection}{\numberline {4.1.5}Configurazione compile-time e runtime}{24}{subsection.4.1.5}%
+\contentsline {subsection}{\numberline {4.1.6}Import semplificato dell'API}{24}{subsection.4.1.6}%
+\contentsline {section}{\numberline {4.2}Design della Stream IR}{24}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}Struttura dell'albero}{25}{subsection.4.2.1}%
+\contentsline {section}{\numberline {4.3}Rappresentazione per la Code Generation (OP Ir)}{25}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Valori}{26}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Operazioni}{28}{subsection.4.3.2}%
+\contentsline {section}{\numberline {4.4}La collection strategy}{28}{section.4.4}%
+\contentsline {chapter}{\numberline {5}Implementazione}{29}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Parsing}{29}{section.5.1}%
+\contentsline {subsection}{\numberline {5.1.1}Parsing della stream}{29}{subsection.5.1.1}%
+\contentsline {subsubsection}{Rappresentazione dei nodi: ParsedTree}{31}{section*.7}%
+\contentsline {subsubsection}{Il riconoscimento delle espressioni}{31}{section*.8}%
+\contentsline {subsubsection}{Esempi di parsing specifico: filter}{32}{section*.9}%
+\contentsline {subsubsection}{Esempi di parsing specifico: flatMap}{32}{section*.10}%
+\contentsline {subsection}{\numberline {5.1.2}Parsing del collector}{33}{subsection.5.1.2}%
+\contentsline {subsection}{\numberline {5.1.3}Parsing della configurazione statica}{34}{subsection.5.1.3}%
+\contentsline {section}{\numberline {5.2}Enrichment}{34}{section.5.2}%
+\contentsline {section}{\numberline {5.3}Traduzione in OPIr}{34}{section.5.3}%
+\contentsline {section}{\numberline {5.4}Lowering}{34}{section.5.4}%
+\contentsline {section}{\numberline {5.5}Traduzione end-to-end}{34}{section.5.5}%
+\contentsline {chapter}{\numberline {6}Validazione e valutazione}{37}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Strategia di testing}{37}{section.6.1}%
+\contentsline {subsection}{\numberline {6.1.1}Test funzionali}{37}{subsection.6.1.1}%
+\contentsline {subsection}{\numberline {6.1.2}Test di compilazione}{37}{subsection.6.1.2}%
+\contentsline {subsection}{\numberline {6.1.3}Copertura}{37}{subsection.6.1.3}%
+\contentsline {section}{\numberline {6.2}Analisi del codice generato}{37}{section.6.2}%
+\contentsline {subsection}{\numberline {6.2.1}Fusione delle operazioni}{37}{subsection.6.2.1}%
+\contentsline {subsection}{\numberline {6.2.2}Inlining delle lambda}{37}{subsection.6.2.2}%
+\contentsline {subsection}{\numberline {6.2.3}Boxing e allocazioni}{37}{subsection.6.2.3}%
+\contentsline {subsection}{\numberline {6.2.4}Analisi del bytecode}{37}{subsection.6.2.4}%
+\contentsline {section}{\numberline {6.3}Valutazione delle prestazioni}{37}{section.6.3}%
+\contentsline {subsection}{\numberline {6.3.1}Metodologia}{37}{subsection.6.3.1}%
+\contentsline {subsection}{\numberline {6.3.2}Baseline}{37}{subsection.6.3.2}%
+\contentsline {subsection}{\numberline {6.3.3}Benchmark sequenziali}{37}{subsection.6.3.3}%
+\contentsline {subsection}{\numberline {6.3.4}Benchmark paralleli}{37}{subsection.6.3.4}%
+\contentsline {subsection}{\numberline {6.3.5}Allocazioni}{37}{subsection.6.3.5}%
+\contentsline {chapter}{\numberline {7}Retrospettiva}{38}{chapter.7}%

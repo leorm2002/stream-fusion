@@ -1,0 +1,122 @@
+\subsection{Generazione del codice parallelo}
+
+\section{Modello di generazione del codice}
+
+Il modello di generazione del codice adottato da FusedStream deriva direttamente dal modello di esecuzione \emph{push} descritto nella sezione precedente: la generazione del codice è espressa in termini di \emph{continuation}.
+
+L'idea fondamentale è che ogni nodo della rappresentazione intermedia non genera un frammento completo di programma. Esso riceve invece una continuazione che rappresenta il codice da eseguire sul valore prodotto dall'operatore corrente. Il nodo genera quindi il codice ed incorpora al suo interno la continuazione relativa alla parte restante della pipeline.
+
+Si consideri, ad esempio, la stream:
+
+\begin{lstlisting}[language=Scala]
+FusedStream
+.of(source)
+.map(f)
+.filter(p)
+.map(g)
+.collect(collector)
+\end{lstlisting}
+
+La sua rappresentazione logica può essere vista come un albero nel quale ogni operatore contiene il proprio predecessore:
+
+$$
+\operatorname{Collect}
+\left(
+  \operatorname{Map}_g
+  \left(
+    \operatorname{Filter}_p
+    \left(
+      \operatorname{Map}_f
+      \left(
+        \operatorname{Source}
+      \right)
+    \right)
+  \right)
+\right).
+$$
+
+La generazione avviene quindi costruendo progressivamente una continuazione.
+
+Indicando con \(K(v)\) il codice che deve essere eseguito una volta prodotto un valore \(v\), il terminale costituisce la continuazione più interna:
+
+$$
+K_0(v)
+=
+\operatorname{collector}(v).
+$$
+
+L'operatore \texttt{map(g)} costruisce una nuova continuazione che calcola il valore trasformato e lo passa alla continuazione precedente:
+
+$$
+K_1(v)
+=
+\mathbf{let}\ y = g(v)\ \mathbf{in}\ K_0(y).
+$$
+
+Il \texttt{filter(p)} racchiude invece la continuazione successiva all'interno di una condizione:
+
+$$
+K_2(v)
+=
+\mathbf{if}\ p(v)\ \mathbf{then}\ K_1(v).
+$$
+
+Infine, il primo \texttt{map(f)} produce:
+
+$$
+K_3(v)
+=
+\mathbf{let}\ x = f(v)\ \mathbf{in}\ K_2(x).
+$$
+
+La sorgente utilizza quindi la continuazione risultante come corpo del proprio ciclo:
+
+$$
+\operatorname{foreach}(source,\ v \Rightarrow K_3(v)).
+$$
+
+Il codice risultante assume pertanto una forma equivalente a:
+
+\begin{lstlisting}[language=Scala]
+while (sourceCondition) {
+  val sourceValue = readSource()
+  val x = f(sourceValue)
+  if (p(x)) {
+    val y = g(x)
+    collector(y)
+  }
+}
+\end{lstlisting}
+
+La generazione può quindi essere rappresentata come una composizione di blocchi, dove ciascun operatore avvolge la continuazione prodotta dagli operatori posti a valle:
+
+$$
+\boxed{
+  \texttt{Source loop}
+  \left[
+    \boxed{
+      \texttt{x = f(value)}
+      \left[
+        \boxed{
+          \texttt{if (p(x))}
+          \left[
+            \boxed{
+              \texttt{y = g(x)}
+              \left[
+                \boxed{\texttt{collector(y)}}
+              \right]
+            }
+          \right]
+        }
+      \right]
+    }
+  \right]
+}
+$$
+
+Questa struttura mette in evidenza come il codice venga costruito dall'esterno verso l'interno. La sorgente definisce il ciclo principale, mentre gli operatori intermedi trasformano progressivamente il blocco che costituisce il corpo del ciclo. Il terminale rappresenta infine il punto più interno della continuazione.
+
+\paragraph{Nota sulla rappresentazione del codice generato}
+In questa sezione si fa riferimento alla ``generazione di codice''. L'implementazione reale di FusedStream introduce tuttavia un ulteriore livello di astrazione: il generatore non emette immediatamente codice Scala, ma costruisce una rappresentazione intermedia composta da nodi \texttt{OpIr}~\ref{sec:op-ir}.
+Di conseguenza, quando nel seguito si afferma che un operatore `genera un \texttt{if}'', `introduce un \texttt{while}'' oppure ``materializza una variabile'', si intende più precisamente che esso genera i corrispondenti nodi della \texttt{OpIr}. Solo in una fase successiva tale rappresentazione viene tradotta nei costrutti Scala concreti.
+

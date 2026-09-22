@@ -1,0 +1,198 @@
+\section{Traduzione end-to-end}
+
+Si consideri:
+
+\begin{lstlisting}[language=Scala]
+FusedStream.from(list)
+.map(f)
+.filter(p)
+.toArray
+\end{lstlisting}
+
+A livello logico, la pipeline può essere rappresentata dalla seguente \texttt{StreamIr}:
+
+$$
+\operatorname{CollectionStrategy.ToArray}_{seq}
+\left(
+  \operatorname{Filter}_{p}
+  \left(
+    \operatorname{Map}_{f}
+    \left(
+      \operatorname{JListSource}(list)
+    \right)
+  \right)
+\right).
+$$
+
+La rappresentazione descrive esclusivamente la composizione degli operatori. Durante la generazione, tale struttura viene invece attraversata costruendo progressivamente la continuazione da applicare a ogni elemento prodotto dalla sorgente.
+
+$$
+K_0(v)
+=
+\operatorname{appendToArray}(v).
+$$
+$$
+K_1(v)
+=
+\mathbf{if}\ p(v)\ \mathbf{then}\ K_0(v).
+$$
+$$
+K_2(v)
+=
+\mathbf{let}\ y=f(v)\ \mathbf{in}\ K_1(y).
+$$
+
+Si ottiene quindi, in forma espansa:
+
+$$
+K_2(v)
+=
+\mathbf{let}\ y=f(v)\ \mathbf{in}
+\left(
+  \mathbf{if}\ p(y)\ \mathbf{then}
+  \operatorname{appendToArray}(y)
+\right).
+$$
+
+La struttura può essere letta anche come una serie di blocchi annidati:
+
+$$
+\boxed{
+  \operatorname{While}
+  \left[
+    \boxed{
+      y = f(x)
+      \left[
+        \boxed{
+          \operatorname{IfValue}(p(y))
+          \left[
+            \boxed{
+              \operatorname{ToArrayAppend}(y)
+            }
+          \right]
+        }
+      \right]
+    }
+  \right]
+}
+$$
+
+In particolare, la traduzione evidenzia il ruolo delle continuation. Il terminale genera il blocco più interno; il \texttt{filter} riceve tale blocco e lo racchiude in un nodo condizionale; la \texttt{map} riceve a sua volta questa continuazione e antepone la produzione del nuovo valore. Infine, la sorgente inserisce l'intera continuazione all'interno del corpo del proprio ciclo.
+
+Nel caso della \texttt{EnrichedJListSource}, il ciclo può essere rappresentato schematicamente nella \texttt{OpIr} mediante una condizione \texttt{LessThan} sull'indice corrente e sulla dimensione della lista:
+
+$$
+\operatorname{LessThan}(i, size).
+$$
+
+Analogamente, il filtro viene abbassato in un nodo condizionale, ad esempio \texttt{IfValue}, il cui corpo coincide con la continuazione associata alla parte restante della pipeline.
+
+Il terminale \texttt{toArray} sequenziale introduce infine lo stato necessario alla costruzione del risultato. In presenza di un filtro, la cardinalità finale non coincide necessariamente con quella della sorgente; la strategia di collezione deve pertanto mantenere separato l'indice di lettura dalla posizione di inserimento nell'array risultante. Concettualmente:
+
+Questa struttura viene rappresentata tramite nodi della \texttt{OpIr}. La rappresentazione risultante è:
+
+\begin{lstlisting}[
+  language=OPIR,
+  caption={OPIR generato per una pipeline con mapping, filtro e raccolta in array},
+  label={lst:opir-example}
+]
+statements = [
+  // Estrae la lista di origine
+  Declare(source$macro$1,ScalaExpr(numbers)),
+  // Estrae la size della lista
+  Declare(sourceSize$macro$1,ScalaExpr(source$macro$1.size())),
+  // Crea un vettore preallocato
+  Declare(vec$macro$1,ArrayDefine[scala.Int](ScalaExpr(sourceSize$macro$1))),
+  // Dichiara il counter e inizializza a 0
+  Declare(i$macro$1,ConstantVal(0)),
+  // Genera codice ottimizzato a runtime se e' una attaylist usiamo accesso indicizzato (costo o(1), niete iteratori)
+  If(
+    condition =IsInstanceOf[java.util.ArrayList[]](ScalaExpr(source$macro$1)),
+    then =
+      CodeBlock(
+        Declare(i$macro$2,ConstantVal(0)),
+        While(
+          // Ciclo diretto su size, non abbiamo condizioni come limit o skip
+          condition =LessThan(SymbolRef(i$macro$2),ScalaExpr(sourceSize$macro$1)),
+          body =
+            CodeBlock(
+              // Leggiamo valore della list in una nuova variabile.
+              // Se useUnsafe = true allora JListRead legge direttamente
+              // l'array sottostante ad arraylist tramite varhandle
+              Declare(elem$macro$1,
+                      JListRead(ScalaExpr(source$macro$1),
+                      SymbolRef(i$macro$2))),
+              // Map
+              CodeBlock(
+                Declare(
+                  mapped$macro$1,
+                  ApplyFun(((i: scala.Int) => i.*(2)),SymbolRef(elem$macro$1))
+                ),
+                // Filter
+                If(
+                  condition =ApplyFun(
+                        ((i: scala.Int) => i.%(2).==(0)),
+                        SymbolRef(mapped$macro$1)),
+                  then =
+                    // Se la condizion e' risptettata write all'indice
+                    CodeBlock(
+                      ArrayWrite(
+                        SymbolRef(vec$macro$1),
+                        SymbolRef(i$macro$1),
+                        SymbolRef(mapped$macro$1)),
+                      Inc(i$macro$1)
+                    )
+                )
+              ),
+              Inc(i$macro$2)
+            )
+        )
+      ),
+    //codice non ottimizzato, per List senza accesso diretto, usa iteratore
+    else =...
+  )
+],
+result =  IfValue(
+  // In base alla size dell'array lo ritorno direttamete o lo tronco
+  Equal(SymbolRef(i$macro$1),ArrayLength(SymbolRef(vec$macro$1))),
+  SymbolRef(vec$macro$1),
+  ArrayTake(SymbolRef(vec$macro$1),SymbolRef(i$macro$1))
+)
+\end{lstlisting}
+
+L'elenco di operazioni viene poi tradotto, durante il lowering nel bytecode java corrispondente (tramite CFR) a:
+
+\begin{lstlisting}[language=java]
+  ArrayList<Integer> numbers = new ArrayList<Integer>();
+  numbers.addAll(List.of(..));
+
+  int[] nArray;
+  RuntimeConfig conff = RuntimeConfig$.MODULE$.default();
+  ArrayList<Integer> source$macro$1 = numbers;
+  int sourceSize$macro$1 = source$macro$1.size();
+  int[] vec$macro$1 = new int[sourceSize$macro$1];
+  int i$macro$1 = 0;
+  if (source$macro$1 instanceof ArrayList) {
+      ArrayList<Integer> list$proxy1 = source$macro$1;
+      Object[] raw$macro$1 = ArrayListAccessor$.MODULE$.inline$ElementDataHandle().get(list$proxy1);
+      for (int i$macro$2 = 0; i$macro$2 < sourceSize$macro$1; ++i$macro$2) {
+          int elem$macro$1 = BoxesRunTime.unboxToInt(raw$macro$1[i$macro$2]);
+          int mapped$macro$1 = elem$macro$1 * 2;
+          if (mapped$macro$1 % 2 != 0) continue;
+          vec$macro$1[i$macro$1] = mapped$macro$1;
+          ++i$macro$1;
+      }
+  } else {
+      // tramite foreach, rimosso per brevita'
+  }
+  if (i$macro$1 == vec$macro$1.length) {
+      nArray = vec$macro$1;
+  } else {
+      Object object = Predef$.MODULE$.genericArrayOps(vec$macro$1);
+      nArray = (int[])ArrayOps$.MODULE$.take$extension(object, i$macro$1);
+  }
+  int[] result = nArray;
+\end{lstlisting}
+
+\label{sec:lowring}
+

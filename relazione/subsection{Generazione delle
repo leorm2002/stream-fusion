@@ -1,0 +1,119 @@
+\subsection{Generazione delle \texttt{flatMap}}
+
+L'operatore \texttt{flatMap} introduce una difficoltà ulteriore rispetto agli operatori precedentemente descritti. Mentre \texttt{map}, \texttt{filter}, \texttt{skip} e \texttt{limit} possono essere ricondotti a trasformazioni o condizioni applicate all'interno di un singolo livello di iterazione, una \texttt{flatMap} introduce una nuova sorgente per ogni elemento prodotto dalla stream a monte e, di conseguenza, un nuovo livello di iterazione.
+
+Si consideri, ad esempio, la pipeline:
+
+\begin{lstlisting}[language=Scala]
+FusedStream
+.of(source)
+.map(f)
+.flatMap(x => g(x))
+.filter(p)
+.map(h)
+.collect(collector)
+\end{lstlisting}
+
+Il codice generato assume concettualmente la forma:
+
+\begin{lstlisting}[language=Scala]
+while (outerCondition) {
+val sourceValue = readSource()
+val x = f(sourceValue)
+
+val inner = g(x)
+
+while (innerCondition) {
+  val innerValue = readInner()
+  ```
+  if (p(innerValue)) {
+    val mappedValue = h(innerValue)
+    collector(mappedValue)
+  }
+  ```
+  }
+}
+\end{lstlisting}
+
+La caratteristica fondamentale è che tutti gli operatori posti a valle della \texttt{flatMap} devono essere ``trasferiti'' all'interno del ciclo che attraversa la stream prodotta dalla funzione di mapping. In altri termini, la \texttt{flatMap} interrompe la generazione lineare della pipeline e introduce un nuovo contesto di produzione nel quale deve essere generata l'intera continuazione della stream.
+
+È possibile interpretare questa trasformazione in termini di una continuazione \(K\). Se \(K(x)\) rappresenta il codice necessario a elaborare un elemento \(x\) attraverso tutti gli operatori successivi, una normale sorgente può essere vista schematicamente come:
+
+$$
+\operatorname{foreach}(source, x \Rightarrow K(x)).
+$$
+
+Una \texttt{flatMap} sostituisce invece ogni elemento \(x\) con una nuova sorgente \(f(x)\), ottenendo:
+
+$$
+\operatorname{foreach}
+\left(
+  source,
+  x \Rightarrow
+  \operatorname{foreach}
+  \left(
+    f(x),
+    y \Rightarrow K(y)
+  \right)
+\right).
+$$
+
+La continuazione \(K\) non viene quindi eseguita direttamente sull'elemento della stream esterna, ma viene spostata nel ciclo della stream interna.
+
+\paragraph{Parsing mediante binder}
+
+Questa struttura pone un problema: durante l'espansione della macro non esiste ancora il valore concreto assunto da \texttt{x}. Per analizzare la funzione e costruire la rappresentazione intermedia della stream restituita viene utilizzato allora un \emph{binder}. Il binder rappresenta l'elemento che sarà prodotto dal ciclo esterno e permette di effettuare il parsing rispetto a una variabile fittizia.
+
+Concettualmente, una funzione
+
+$$
+x \mapsto g(x)
+$$
+
+viene analizzata applicandola a un valore simbolico \(b\):
+
+$$
+g(b),
+$$
+
+Il risultato del parsing è quindi una rappresentazione intermedia della stream interna che mantiene esplicita la dipendenza dal binder. Solo durante la successiva generazione del codice tale riferimento viene associato alla variabile concreta materializzata nel ciclo esterno.
+
+Per esempio, data:
+
+\begin{lstlisting}[language=Scala]
+.flatMap(x =>
+  FusedStream
+  .of(repeat(x, 2))
+  .map(y => y * 10)
+)
+\end{lstlisting}
+
+durante il parsing è possibile ragionare schematicamente su:
+
+\begin{lstlisting}[language=Scala]
+val binder = <valore simbolico>
+FusedStream
+  .of(repeat(binder, 2))
+  .map(y => y * 10)
+\end{lstlisting}
+
+senza conoscere il valore concreto che il binder assumerà. In fase di generazione, il binder viene invece risolto nella variabile prodotta dal ciclo esterno:
+
+\begin{lstlisting}[language=Scala]
+while (outerCondition) {
+  val x = ...
+  val binder = x
+  val inner = repeat(x, 2)
+  while (innerCondition) {
+    val y = readInner()
+    val mapped = y * 10
+    ```
+    // continuazione della pipeline
+    ```
+  }
+}
+\end{lstlisting}
+
+Il binder costituisce quindi il collegamento tra due fasi distinte: durante il parsing consente di costruire la IR della stream interna facendo riferimento a un valore simbolico; durante la generazione permette di sostituire tale riferimento con la variabile concreta resa disponibile dal ciclo che racchiude la \texttt{flatMap}.
+
+Questo meccanismo rende possibile trattare anche \texttt{flatMap} annidate in maniera ricorsiva. Ogni \texttt{flatMap} introduce un nuovo binder, un nuovo livello di iterazione e un nuovo contesto nel quale viene inserita la continuazione della pipeline. La struttura finale del codice generato rispecchia quindi direttamente la struttura di annidamento delle sorgenti introdotte dalle diverse \texttt{flatMap}.
