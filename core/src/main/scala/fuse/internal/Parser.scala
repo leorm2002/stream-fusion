@@ -36,6 +36,8 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     // Extract the type parsed as the output and check for validity
 
     debug("Starting to parse the terminal")
+    debug(collector.asTerm.show)
+
     val parsedCollector = extractCollectionStrategy(collector)
     debug("Terminal parsing done")
     debug("Parsing the done")
@@ -184,10 +186,10 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
 
         val flatMap = FlatMap[In, out](
           upstream = upstream.current, // keep the reference to the previous node
-          innerTree = verifiedInnter, // The inner tree is the result of the parsing of the function
+          innerStream = verifiedInnter, // The inner tree is the result of the parsing of the function
           inType = upstream.outType, // The input of the flatmap is the output of the previous node
           outType = Type.of[out], // The outptu is out, the type of the domain of the function
-          elemSymbol = flatMapBinder, // keep the reference to the binder, will be linked later to the previous step
+          binder = flatMapBinder, // keep the reference to the binder, will be linked later to the previous step
           innerDeclarations = parsedInner.declarations // the declarations extracted during the parsing of the inner stream
         )
 

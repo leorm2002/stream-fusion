@@ -19,8 +19,7 @@ private[internal] object Phase {
   sealed trait Enriched extends Phase
 }
 
-/**
-  * Represents the mode of execution of a stream: sequential or parallel
+/** Represents the mode of execution of a stream: sequential or parallel
   */
 private[internal] enum ExecutionMode {
   case Sequential
@@ -50,7 +49,12 @@ private[internal] class StreamIr(using val quotes: Quotes) {
   }
 
   /** The base AST, abtained by the parsing phase */
-  case class Ast[A, Buf, R](parsedStream: StreamTree[Phase.Raw, A], collectionStrategy: CollectionStrategy[A, Buf, R], prefixStatements: List[Statement],executionMode: ExecutionMode)
+  case class Ast[A, Buf, R](
+      parsedStream: StreamTree[Phase.Raw, A],
+      collectionStrategy: CollectionStrategy[A, Buf, R],
+      prefixStatements: List[Statement],
+      executionMode: ExecutionMode
+  )
 
   /** Represents parsed optimized and enriched stream
     */
@@ -108,13 +112,13 @@ private[internal] class StreamIr(using val quotes: Quotes) {
       *
       * @param upstream
       *   the stepd who precedes the flat map operation
-      * @param innerTree
+      * @param innerStream
       *   the stream tree "contained" by the flatmap which will end up injected in parent loop
       * @param inType
       *   that type of element flowing into
       * @param outType
       *   that type of element flowing out
-      * @param elemSymbol
+      * @param binder
       *   this is a variable generated at compile time, it binds the input of the inner stream without having access to the actual result of the previous step, see the code
       *   generation phase to see how it work
       * @param innerDeclarations
@@ -122,10 +126,10 @@ private[internal] class StreamIr(using val quotes: Quotes) {
       */
     case FlatMap[A, B](
         upstream: StreamTree[Phase.Raw, A],
-        innerTree: StreamTree[Phase.Raw, B],
+        innerStream: StreamTree[Phase.Raw, B],
         inType: Type[A],
         outType: Type[B],
-        elemSymbol: Symbol,
+        binder: Symbol,
         innerDeclarations: List[Statement]
     ) extends StreamTree[Phase.Raw, B] with WithUpstream[Phase.Raw, A]
 
@@ -133,10 +137,10 @@ private[internal] class StreamIr(using val quotes: Quotes) {
       */
     case EnrichedFlatMap[A, B](
         upstream: StreamTree[Phase.Enriched, A],
-        innerTree: StreamTree[Phase.Enriched, B], // AST dell'inner stream già arricchito
+        innerStream: StreamTree[Phase.Enriched, B], // AST dell'inner stream già arricchito
         inType: Type[A],
         outType: Type[B],
-        elemSymbol: Symbol,
+        binder: Symbol,
         innerDeclarations: List[Statement],
         innerMaterialized: List[Declaration],
         val predicates: List[Expr[Boolean]]

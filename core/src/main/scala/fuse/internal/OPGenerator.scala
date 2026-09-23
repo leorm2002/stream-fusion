@@ -322,12 +322,12 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     given Type[OUT] = flatMap.outType
 
     val upstreamEmit: Emit[IN] = emitted => {
-      val innerBody = buildBody(flatMap.innerTree, emit, flatMap.predicates, None)
+      val innerBody = buildBody(flatMap.innerStream, emit, flatMap.predicates, None)
       // Bind the outer element before initializing the inner source. Inner counters and declarations
       // belong to this iteration, while the inherited predicates can stop all enclosing loops.
       CodeBlock(
         List(
-          Declare(flatMap.elemSymbol, emitted.elem)
+          Declare(flatMap.binder, emitted.elem)
         ) ++
           flatMap.innerDeclarations.map(ExternalStatement.apply) ++
           flatMap.innerMaterialized.map(materializedToOp) ++
@@ -520,7 +520,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       case Filter(upstream, predicate, outType)                                                                                => getParallelSourceSize(upstream)
       case Map(upstream, function, inType, outType)                                                                            => getParallelSourceSize(upstream)
       case EnrichedSlice(upstream, from, until, outType, counterRef)                                                           => None
-      case EnrichedFlatMap(upstream, innerTree, inType, outType, elemSymbol, innerDeclarations, innerMaterialized, predicates) => getParallelSourceSize(upstream)
+      case EnrichedFlatMap(upstream, innerStream, inType, outType, binder, innerDeclarations, innerMaterialized, predicates) => getParallelSourceSize(upstream)
     }
   }
 }

@@ -54,6 +54,8 @@ object FusedStream {
   // toList, toSet, findFirst, toArray, summing
   export fuse.FusedStream
   export Collector.{toList, toSet, findFirst}
+  export fuse.CompileConfig
+  export fuse.RuntimeConfig
 
   @compileTimeOnly("FusedStream.toArray can only be used as a FusedStream terminal collector")
   def toArray[T]: ToArrayCollector[T] = null.asInstanceOf[ToArrayCollector[T]]

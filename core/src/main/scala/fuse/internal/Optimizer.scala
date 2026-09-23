@@ -18,8 +18,13 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
     val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
     val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](ast.parsedStream, earlyRef.toList)
 
+    debug(s"[Enriched] => $enrichedStream")
+    debug(s"[Declarations] => $declarations")
+    debug(s"[ExitDeclarations] => $exitDeclarations")
+
     // Verifica se gli indici di produzione sono 1:1 con quelli della fonte, Estrae, se è presente, l'esrpressione che definisce l'upper bound della fonte
     val streamInfo = analyze(enrichedStream)
+    debug(s"[streamInfo] => $streamInfo")
 
     AstExt(
       enrichedStream,
@@ -126,17 +131,17 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
       case fm: FlatMap[in, OUT] => {
 
         // Enriche the inner stream, already extracted during the optimization phase, gathers exitPredicates + local predicates to the inner
-        val (innerEnrichedTree, innerDecls, innerAccumulatedPredicates) = enrich[OUT](fm.innerTree, exitPredicates)
+        val (innerEnrichedTree, innerDecls, innerAccumulatedPredicates) = enrich[OUT](fm.innerStream, exitPredicates)
         // Recurisvy Enrich the upstream upstream using the predicates from the level of the flatmap
         val (enrichedUpstream, upstreamDeclarations, fullExitPredicates) = enrich[in](fm.upstream, exitPredicates)
 
         val enrichedFlatMap =
           EnrichedFlatMap[in, OUT](
             upstream = enrichedUpstream,
-            innerTree = innerEnrichedTree,
+            innerStream = innerEnrichedTree,
             inType = fm.inType,
             outType = fm.outType,
-            elemSymbol = fm.elemSymbol,
+            binder = fm.binder,
             innerDeclarations = fm.innerDeclarations,
             innerMaterialized = innerDecls,
             predicates = innerAccumulatedPredicates

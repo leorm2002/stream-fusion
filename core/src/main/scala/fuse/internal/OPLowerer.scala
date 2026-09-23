@@ -36,7 +36,10 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
   def lowerProgram[OUT](program: Program[OUT])(using Type[OUT]): Expr[OUT] = {
     val statements = program.statements.flatMap(lowerOp)
     val result = lowerValue(program.result)
-    Block(statements, result.asTerm).asExprOf[OUT]
+    val res = Block(statements, result.asTerm).asExprOf[OUT]
+    debug("AST finale")
+    debug(res.asTerm.show(using Printer.TreeStructure))
+    res
   }
 
   def lowerOp(op: Op): List[Statement] = {
