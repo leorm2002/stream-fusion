@@ -156,6 +156,7 @@ I benchmark condotti tramite JMH mostrano uno speedup significativo e un consumo
 \newpage
 
 \chapter{Introduzione}
+\label{chap:introduzione}
 
 Le API basate su pipeline costituiscono un modello di programmazione diffuso per l'elaborazione di collezioni e sequenze di dati. Operazioni come \texttt{map}, \texttt{filter} e \texttt{flatMap} permettono di descrivere una computazione in forma dichiarativa, separando la logica dell'elaborazione dai dettagli relativi all'attraversamento della struttura dati.
 
@@ -220,21 +221,22 @@ della stessa elaborazione.
 
 Il resto della relazione è organizzato come segue.
 
-Il Capitolo~2 definisce i requisiti del sistema, distinguendo gli obiettivi rivolti all'utente, i requisiti interni del compilatore, i requisiti non funzionali e le funzionalità esplicitamente escluse dal progetto.
+Il Capitolo~\ref{chap:requisiti} definisce i requisiti del sistema, distinguendo gli obiettivi rivolti all'utente, i requisiti interni del compilatore, i requisiti non funzionali e le funzionalità esplicitamente escluse dal progetto.
 
-Il Capitolo~3 introduce i concetti necessari alla comprensione della soluzione, con particolare riferimento alla stream fusion e alle funzionalità di metaprogrammazione e reflection offerte da Scala 3.
+Il Capitolo~\ref{chap:metaprogramming} introduce i concetti necessari alla comprensione della soluzione, con particolare riferimento alla stream fusion e alle funzionalità di metaprogrammazione e reflection offerte da Scala 3.
 
-Il Capitolo~4 presenta l'architettura complessiva di FusedStream e la suddivisione del processo di compilazione nelle sue principali componenti.
+Il Capitolo~\ref{chap:architettura} presenta l'architettura complessiva di FusedStream e la suddivisione del processo di compilazione nelle sue principali componenti.
 
-Il Capitolo~5 descrive le principali scelte di design, includendo l'API pubblica, la rappresentazione logica della pipeline, la rappresentazione intermedia utilizzata per la generazione del codice e il modello delle operazioni terminali.
+Il Capitolo~\ref{chap:design} descrive le principali scelte di design, includendo l'API pubblica, la rappresentazione logica della pipeline, la rappresentazione intermedia utilizzata per la generazione del codice e il modello delle operazioni terminali.
 
-Il Capitolo~6 approfondisce l'implementazione del compilatore, seguendo le trasformazioni che conducono dall'AST Scala iniziale alla Stream IR all al lowering verso il codice Scala. Il capitolo si conclude con un esempio di compilazione end-to-end che mostra le diverse rappresentazioni della stessa pipeline durante il processo di compilazione.
+Il Capitolo~\ref{chap:implementazione} approfondisce l'implementazione del compilatore, seguendo le trasformazioni che conducono dall'AST Scala iniziale alla Stream IR fino al lowering verso il codice Scala. Il capitolo si conclude con un esempio di compilazione end-to-end che mostra le diverse rappresentazioni della stessa pipeline durante il processo di compilazione.
 
-Il Capitolo~7 è dedicato alla validazione del sistema e alla valutazione delle prestazioni del codice generato.
+Il Capitolo~\ref{chap:validazione} è dedicato alla validazione del sistema e alla valutazione delle prestazioni del codice generato.
 
-Infine, il Capitolo~8 raccoglie una retrospettiva sul progetto, discutendone i limiti, le decisioni progettuali emerse durante lo sviluppo e i possibili sviluppi futuri.
+Infine, il Capitolo~\ref{chap:retrospettiva} raccoglie una retrospettiva sul progetto, discutendone i limiti, le decisioni progettuali emerse durante lo sviluppo e i possibili sviluppi futuri.
 
 \chapter{Analisi dei requisiti}
+\label{chap:requisiti}
 
 \section{Requisiti di business}
 \subsection{RB-1 Colmare il divario tra espressività e prestazioni}
@@ -455,12 +457,13 @@ Può essere riscritta sostituendo direttamente $x$ con $a$ all'interno di $e$. S
 Nell'AST di Scala, un riferimento a una variabile è associato al relativo \texttt{Symbol}. Il nome è solamente una delle proprietà del simbolo e non ne rappresenta l'identità. La Reflection API permette di creare nuove variabili attraverso: \texttt{Symbol.newVal(...)}, e di fare successivamente riferimento allo stesso simbolo attraverso \texttt{Ref(symbol)}. La definizione viene creata nell'AST tramite \texttt{ValDef(symbol, Some(initializer))} La distinzione tra nome e simbolo garantisce inoltre l'\emph{hygiene} della macro: variabili generate dalla macro non possono andare in conflitto con variabili omonime definite nel codice utente.
 
 \chapter{Design architetturale}
+\label{chap:architettura}
 
 \section{Architettura generale}
 
 La libreria organizzata in due aree: l'\emph{API pubblica}, e il \emph{compilatore}.
 
-L'API pubblica, (descritta in Sezione~\ref{sec:api}), definisce il modello di programmazione esposto dalla libreria: sorgenti, operatori intermedi e operazioni terminali. L'operazione terminale attiva, durante la compilazione, il processo di analisi e generazione statica del codice.
+L'API pubblica (descritta nella Sezione~\ref{sec:api}) definisce il modello di programmazione esposto dalla libreria: sorgenti, operatori intermedi e operazioni terminali. L'operazione terminale attiva, durante la compilazione, il processo di analisi e generazione statica del codice.
 
 Il compilatore di FusedStream opera interamente a compile time: riceve dal compilatore Scala la rappresentazione sintattica tipizzata della pipeline, ne estrae una rappresezione logica della pipeline, determina le informazioni necessarie alla sua esecuzione e produce un nuovo frammento di codice Scala. Quest'ultimo viene reinserito nel normale processo di compilazione e costituisce il codice effettivamente eseguito a runtime.
 
@@ -611,7 +614,7 @@ Si possono quindi distinguere due momenti chiari nel funzionamento del sistema:
 
 \end{figure}
 
-L'architettura del sistema è organizzata come una pipeline di che parte dal codice dell'utente e termina nella generazione del codice eseguibile. Ad alto livello, il flusso principale può essere rappresentato come
+L'architettura del sistema è organizzata come una pipeline che parte dal codice dell'utente e termina nella generazione del codice eseguibile. Come illustrato in Figura~\ref{fig:system_architecture}, ad alto livello il flusso principale può essere rappresentato come
 $$
   \begin{aligned}
     \text{Public API}
@@ -632,7 +635,7 @@ $$
 
 \subsection{Public API e DSL}
 
-La Public API (approfondita nella sezione~\ref{sec:api}) costituisce il punto di ingresso del sistema per l'utente. Attraverso questa interfaccia vengono descritti: la sorgente, le operazioni da effettuare e l'operazione terminale.
+La Public API (approfondita nella Sezione~\ref{sec:api}) costituisce il punto di ingresso del sistema per l'utente. Attraverso questa interfaccia vengono descritti: la sorgente, le operazioni da effettuare e l'operazione terminale.
 
 La DSL non esegue direttamente le operazioni richieste, ma ha il solo scopo di descrivere le pipeline che può essere così osservata e trasformata dalla macro durante la compilazione.
 
@@ -672,7 +675,7 @@ Il parsing è effettuato anche sul terminale e sulla configurazione: il Collecto
 Alcuni collector possono essere rappresentati direttamente da implementazioni fornite dall'utente, mentre altri costituiscono elementi speciali della DSL ai quali il compilatore associa una strategia specializzata.
 
 \subsection{Stream IR}
-La Stream IR (vedi sezione~\ref{sec:stream-ir}) è l'output del parser e costituisce la rappresentazione intermedia ad alto livello della pipeline. Ogni nodo conserva le informazioni necessarie a rappresentare l'operazione associata. La Stream IR costituisce quindi il punto di separazione tra il front-end della libreria, responsabile dell'interpretazione della DSL, e le fasi successive, responsabili della pianificazione e della generazione del codice.
+La Stream IR (approfondita nella Sezione~\ref{sec:stream-ir}) è l'output del parser e costituisce la rappresentazione intermedia ad alto livello della pipeline. Ogni nodo conserva le informazioni necessarie a rappresentare l'operazione associata. La Stream IR costituisce quindi il punto di separazione tra il front-end della libreria, responsabile dell'interpretazione della DSL, e le fasi successive, responsabili della pianificazione e della generazione del codice.
 
 \subsection{Enrichment}
 La fase di Enrichment completa la Stream IR con informazioni non sono presenti nella descrizione iniziale della pipeline, ad esempio:
@@ -686,10 +689,10 @@ La fase di Enrichment completa la Stream IR con informazioni non sono presenti n
 \end{itemize}
 
 \subsection{OP IR Generator}
-L'OP IR Generator (TODO:sezione) traduce la rappresentazione logica arricchita della stream in una rappresentazione orientata all'esecuzione. Se la Stream IR esprimequali operazioni compongono la pipeline, l'OP IR descrive come devono essere realizzate. La presenza di questa ulteriore rappresentazione permette di mantenere le decisioni relative al modello di esecuzione separate dai dettagli sintattici del linguaggio target.
+L'OP IR Generator (approfondito nella Sezione~\ref{sec:opir-translation}) traduce la rappresentazione logica arricchita della stream nella rappresentazione intermedia orientata all'esecuzione (OP IR, Sezione~\ref{sec:op-ir}). Se la Stream IR esprime quali operazioni compongono la pipeline, l'OP IR descrive come devono essere realizzate. La presenza di questa ulteriore rappresentazione permette di mantenere le decisioni relative al modello di esecuzione separate dai dettagli sintattici del linguaggio target.
 
 \subsection{Lowering e Code Generator}
-La fase di Lowering traduce l'OP IR nel codice Scala. Il Code Generator si occupa quindi di produrre espressioni corrispondenti a:
+La fase di Lowering (approfondita nella Sezione~\ref{sec:lowering}) traduce l'OP IR nel codice Scala. Il Code Generator si occupa quindi di produrre espressioni corrispondenti a:
 
 \begin{itemize}
   \item dichiarazioni e assegnamenti;
@@ -733,11 +736,11 @@ Il flusso complessivo della trasformazione può quindi essere sintetizzato come:
 \section{Architettura runtime}
 
 \subsection{Il modello scelto}
-Alla luce dei requisiti che non comprendono la necessità di effettuare zipping tra più stream e prediligono invece come obiettivo principe il massimo delle performance è stata naturale la scelta del modello \texttt{push}~\ref{subsec:pushstream}
+Alla luce dei requisiti che non comprendono la necessità di effettuare zipping tra più stream e prediligono invece come obiettivo principe il massimo delle performance è stata naturale la scelta del modello \texttt{push} (Sezione~\ref{subsec:pushstream}).
 
 \subsubsection{Sintesi delle Operazioni supportate}
 
-In Tabella~\ref{tab:stream_ops} viene riportato un quadro riassuntivo e delle caratteristiche delle operazioni analizzate.
+In Tabella~\ref{tab:stream_ops} viene riportato un quadro riassuntivo delle caratteristiche delle operazioni analizzate.
 
 \begin{table}[h!]
   \centering
@@ -791,6 +794,7 @@ La librerie rende possibile parallelizzare solamente con sorgenti e operatori pe
 La restrizione costituisce quindi una scelta progettuale e non una semplice mancanza di funzionalità. L'obiettivo è guidare l'utente verso configurazioni per le quali il parallelismo rappresenti effettivamente una strategia di esecuzione appropriata.
 
 \chapter{Design di dettaglio}
+\label{chap:design}
 
 \section{Design dell'API pubblica}
 \label{sec:api}
@@ -820,7 +824,7 @@ Allo stesso tempo, l'API mantiene un certo grado di estendibilità, in particola
 
 \subsection{Operazioni terminali}
 
-Le operazioni terminali sono rappresentate attraverso l'astrazione \texttt{Collector}:
+Le operazioni terminali sono rappresentate attraverso l'astrazione \texttt{Collector} (Figura~\ref{fig:collector-hierarchy}):
 
 \begin{figure}[htbp]
   \centering
@@ -858,7 +862,7 @@ I quattro parametri di tipo rappresentano rispettivamente:
 
 Il metodo \texttt{supplier} crea lo stato iniziale dell'accumulator, \texttt{accumulator} aggiunge un nuovo elemento, il valore booleano restituito segnala che l'elaborazione può essere interrotta (si pensi a una findFirst). Infine, \texttt{finisher} trasforma lo stato intermedio nel risultato finale.
 
-I collector possono essere esaustivi ovvero richiedere l'elaborazione dell'intera sorgente, oppure possono terminare anticipatamente senza consumare tutti i dati. Questa proprietà è rappresentata tramite la \emph{TerminationPolicy} e i suoi due sottotipi:
+I collector possono essere esaustivi ovvero richiedere l'elaborazione dell'intera sorgente, oppure possono terminare anticipatamente senza consumare tutti i dati. Questa proprietà è rappresentata tramite la \emph{TerminationPolicy} e i suoi due sottotipi (Figura~\ref{fig:termination-policy}):
 
 \begin{figure}[htbp]
   \centering
@@ -920,7 +924,7 @@ La libreria offre anche altri collector predefiniti come \texttt{toList} e \text
 
 La costruzione di una pipeline avviene a partire dal metodo \texttt{from}. Oltre a identificare la sorgente degli elementi, il tipo restituito da \texttt{from} determina quali modalità di esecuzione (parallela/sequenziale) possono essere richieste successivamente.
 
-Non tutte le sorgenti possiedono infatti le caratteristiche necessarie per essere sruttate parallelamente. L'API rappresenta questa proprietà attraverso il tipo restituito: una sorgente per la quale è disponibile l'esecuzione parallela viene rappresentata come un \texttt{ParallelizableSource[A]} (vedi~\ref{fig:stream}).
+Non tutte le sorgenti possiedono infatti le caratteristiche necessarie per essere sruttate parallelamente. L'API rappresenta questa proprietà attraverso il tipo restituito: una sorgente per la quale è disponibile l'esecuzione parallela viene rappresentata come un \texttt{ParallelizableSource[A]} (Figura~\ref{fig:stream}).
 
 Il metodo \texttt{parallel} non appartiene quindi genericamente a ogni \texttt{Stream}, ma solamente alle sorgenti per le quali la libreria dichiara esplicitamente il supporto alla parallelizzazione. Una pipeline costruita a partire da una sorgente non parallelizzabile non può essere convertita in una \texttt{ParallelStream}, l'operazione semplicemente non è disponibile nel tipo statico restituito all'utente.
 
@@ -984,7 +988,7 @@ stream
   .collect(Collector.toArray)
 \end{lstlisting}
 
-è accettabile perché \texttt{ToArrayCollector[T]} è dichiarato come sottotipo di \emph{ParallelCollector}.
+è accettabile perché \texttt{ToArrayCollector[T]} è dichiarato come sottotipo di \emph{ParallelCollector}. La gerarchia complessiva delle astrazioni relative ai collector e le rispettive termination policy sono riportate nel diagramma di Figura~\ref{fig:collectors}.
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.8\textwidth]{drawio/collector.png}
@@ -1104,12 +1108,12 @@ La gerarchia è composta da innanzitutto valori elementari, come costanti o rife
 valori come confronti, operazioni aritmetiche o applicazioni di funzioni, sono inoltre presenti valori specifici come accessi a array o iteratori.
 
 Un \texttt{Value} descrive quindi un'espressione che può essere incorporata all'interno di una \texttt{Op}. Ad esempio, la condizione di un ciclo \texttt{While} è
-rappresentata come un \texttt{Value[Boolean]}, mentre il valore assegnato da una \texttt{AssignVal} è a sua volta rappresentato tramite un \texttt{Value}. Un esempio parziale della gerarchie è presente in figura~\ref{fig:values}
+rappresentata come un \texttt{Value[Boolean]}, mentre il valore assegnato da una \texttt{AssignVal} è a sua volta rappresentato tramite un \texttt{Value}. Un esempio parziale della gerarchia è riportato in Figura~\ref{fig:values}.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[height=0.3\textheight, keepaspectratio]{drawio/value.png}
-  \caption{Struttura semplificata della Stream IR.}
+  \caption{Gerarchia e rappresentazione dei valori nella OP IR.}
   \label{fig:values}
 \end{figure}
 
@@ -1120,14 +1124,7 @@ La sola informazione contenuta nel parametro generico non è però sufficiente p
 Si realizza così una forma di \emph{type capture}: oltre a conoscere staticamente che un nodo produce un valore di tipo \texttt{T}, la IR conserva
 una rappresentazione del tipo utilizzabile dalle Scala Quotes. Per tipi noti in maniera statica, per valori parametrici viene invece propagata attraverso un parametro contestuale \texttt{Type[T]}.
 
-TODO: sposta in lowering e linka
-Questa informazione viene utilizzata durante il lowering per costruire
-espressioni Scala correttamente tipizzate. Il code generator può infatti
-recuperare il \texttt{Type} associato a un \texttt{Value} e renderlo
-disponibile come \texttt{given Type[T]} durante la costruzione delle
-\texttt{Expr[T]}. In questo modo la OP IR conserva le informazioni di tipo
-necessarie alla generazione senza dover ricostruire il tipo a partire dalla
-struttura del nodo.
+Come approfondito nella Sezione~\ref{subsec:lowering-type-preservation}, questa informazione viene poi sfruttata durante il lowering per costruire espressioni Scala correttamente tipizzate.
 
 \subsection{Operazioni}
 
@@ -1143,7 +1140,7 @@ dimensione non è nota staticamente.
 \section{La collection strategy}
 \label{sec:collector_desion}
 
-La fase terminale di una stream è rappresentata internamente attraverso una \texttt{CollectionStrategy}. Questa astrazione descrive la strategia con cui gli elementi prodotti dalla pipeline devono essere consumati e aggregati per ottenere il risultato finale.
+La fase terminale di una stream è rappresentata internamente attraverso una \texttt{CollectionStrategy} (Figura~\ref{fig:coll_strat}). Questa astrazione descrive la strategia con cui gli elementi prodotti dalla pipeline devono essere consumati e aggregati per ottenere il risultato finale.
 
 \begin{figure}[htbp]
   \centering
@@ -1161,6 +1158,7 @@ La seconda comprende invece i \emph{collector opachi}. Questi non costituiscono 
 Questa distinzione consente quindi di specializzare le operazioni terminali note alla libreria, evitando di rappresentarle necessariamente attraverso il protocollo generale di un collector.
 
 \chapter{Implementazione}
+\label{chap:implementazione}
 
 \section{Parsing}
 La fase di parsing ha l'obiettivo di trasformare l'albero sintattico tipizzato prodotto dal compilatore Scala in una \texttt{StreamIR} (Sezione~\ref{sec:stream-ir}) e di estrarre, a partire dal collector (Figura~\ref{fig:collectors}), la corrispondente \texttt{CollectionStrategy}. Il parsing della pipeline e quello dell'operazione terminale sono mantenuti separati e vengono successivamente combinati nella rappresentazione utilizzata dalle fasi successive.
@@ -1194,9 +1192,9 @@ l'obbiettivo della fase di parsing è ricondursi a una StreamIr del tipo:
     \mathrm{Map[Int,Int]}
   \end{aligned}
 \]
-(nota, non è presente il collector in quanto trattato a parte, vedi~\ref{subsec:parsing_collector})
+(si noti che il collector non è incluso in questa schematizzazione in quanto trattato separatamente nella Sezione~\ref{subsec:parsing_collector})
 
-Il parsing è effettuato analizzando l'AST tipizzato esposto dalla reflection API, in particolare il codice in Listing~\ref{lst:filter_map} produce:
+Il parsing è effettuato analizzando l'AST tipizzato esposto dalla reflection API, in particolare il codice del Listato~\ref{lst:filter_map} produce l'albero mostrato nel Listato~\ref{lst:scala-ast}:
 
 \begin{lstlisting}[caption={Rappresentazione ad albero dell'AST di Scala}, label={lst:scala-ast}]
 Inlined(
@@ -1282,7 +1280,7 @@ Inlined(
   \label{fig:parsed_tree}
 \end{figure}
 
-Il trait \texttt{ParsedTree} rappresenta il risultato intermedio del parsing senza richiedere che il tipo di output sia noto al chiamante. Questo è necessario perché il tipo prodotto da una pipeline non è noto a priori, ma viene "scoperto" durante il parsing.
+Il trait \texttt{ParsedTree} (illustrato in Figura~\ref{fig:parsed_tree}) rappresenta il risultato intermedio del parsing senza richiedere che il tipo di output sia noto al chiamante. Questo è necessario perché il tipo prodotto da una pipeline non è noto a priori, ma viene "scoperto" durante il parsing.
 
 Per rappresentare questo tipo "nascosto", \texttt{ParsedTree} utilizza un abstract type member \texttt{Out}. Il tipo concreto viene fissato al momento della costruzione dell'implementazione, quando il tipo è noto. In questo modo il parser può esporre semplicemente un \texttt{ParsedTree}, mantenendo però internamente la correlazione tra il tipo dell'albero \texttt{current: StreamTree[Phase.Raw, Out]} e il relativo tipo di output.
 
@@ -1370,7 +1368,7 @@ $$
   \mathrm{In} \rightarrow \mathrm{Stream[Out]}.
 $$
 
-A questo punto la funzione viene beta-ridotta contro il riferimento al binder:
+A questo punto la funzione viene beta-ridotta (Sezione~\ref{sec:beta-reduction}) contro il riferimento al binder:
 
 \begin{lstlisting}[language=Scala]
 val innerStreamExpr: Expr[Stream[out]] =
@@ -1382,7 +1380,7 @@ Durante la successiva fase di code generation il binder verrà associato al valo
 
 \subsection{Parsing del collector}
 \label{subsec:parsing_collector}
-L'obiettivo di questa operazione è ricondursi a una collection strategy (vedi~\ref{sec:collector_desion}) a partire dalla rappresentazione ricevuta. Il primo passo consiste nell'analizzarne il tipo associato all'espressione confrontadolo con i collector opachi  della libreria, se è questo il caso il parser costruisce direttamente la strategia specializzata corrispondente. Nel caso generale, invece, il collector fornito dall'utente deve essere preservato, viene quindi estratta la \emph{stop policy} per determinare staticamente se il collector supporti lo short-circuiting. Il risultato di questa analisi viene infine incorporato nella strategia generica \texttt{WithCollector}. La trasformazione può essere rappresentata come:
+L'obiettivo di questa operazione è ricondursi a una collection strategy (approfondita nella Sezione~\ref{sec:collector_desion}) a partire dalla rappresentazione ricevuta. Il primo passo consiste nell'analizzarne il tipo associato all'espressione confrontadolo con i collector opachi  della libreria, se è questo il caso il parser costruisce direttamente la strategia specializzata corrispondente. Nel caso generale, invece, il collector fornito dall'utente deve essere preservato, viene quindi estratta la \emph{stop policy} per determinare staticamente se il collector supporti lo short-circuiting. Il risultato di questa analisi viene infine incorporato nella strategia generica \texttt{WithCollector}. La trasformazione può essere rappresentata come:
 
 $$
   \begin{aligned}
@@ -1569,7 +1567,7 @@ Le due informazioni permettono alla fase successiva di selezionare strategie di 
 posizione finale di un array preallocato. Quando è noto soltanto un limite superiore è invece necessario mantenere un indice di scrittura separato ed eventualmente troncare l'array al termine
 dell'elaborazione. Se la cardinalità è sconosciuta, è necessario ricorrere a una struttura di accumulazione dinamica.
 
-\section{Traduzione in OPIr}
+\section{Traduzione in OP IR}
 \label{sec:opir-translation}
 
 Una volta completata la fase di enrichment, la Stream IR contiene le informazioni necessarie
@@ -2218,6 +2216,7 @@ diventa:
 Lo stesso procedimento viene applicato alle operazioni logiche, ai confronti, agli accessi ad array e collezioni e alle operazioni sui collector. La OP IR viene quindi progressivamente eliminata fino a ottenere esclusivamente nodi appartenenti all'AST Scala.
 
 \subsection{Conservazione delle informazioni di tipo}
+\label{subsec:lowering-type-preservation}
 
 Per poter costruire un'\texttt{Expr[T]}, le API di metaprogrammazione richiedono che sia disponibile un'evidenza \texttt{Type[T]}.
 
@@ -2236,7 +2235,7 @@ La rappresentazione mantiene quindi il collegamento tra il sistema di tipi della
 
 \subsection{Applicazione e inlining delle funzioni}
 
-Un caso particolarmente importante è costituito da \texttt{ApplyFun}, che rappresenta l'applicazione di una funzione proveniente, ad esempio, da una \texttt{map} o da un \texttt{filter}. Qui viene utilizzata la $\beta$-reduction:
+Un caso particolarmente importante è costituito da \texttt{ApplyFun}, che rappresenta l'applicazione di una funzione proveniente, ad esempio, da una \texttt{map} o da un \texttt{filter}. Qui viene utilizzata la $\beta$-reduction (descritta nella Sezione~\ref{sec:beta-reduction}):
 
 \begin{lstlisting}[language=Scala]
 case app: ApplyFun[in, out] =>
@@ -2250,7 +2249,7 @@ case app: ApplyFun[in, out] =>
   )
 \end{lstlisting}
 
-Se la funzione è una lambda direttamente disponibile alla macro, il risultato della $\beta$-reduction il corpo della funzione direttamente nel punto di utilizzo.
+Se la funzione è una lambda direttamente disponibile alla macro, il risultato della $\beta$-reduction inserisce il corpo della funzione direttamente nel punto di utilizzo.
 
 Ad esempio:
 
@@ -2331,11 +2330,10 @@ Expr[OUT]
 
 e reinserita nel normale processo di compilazione Scala.
 
-```latex
 \section{Esempio di traduzione end-to-end}
 \label{sec:end-to-end}
 
-Questa sezione ripercorre passo passo il processo di analisi e generazione del codice effettuato dalla libreria a partire da una semplice pipeline costituida.
+Questa sezione ripercorre passo passo il processo di analisi e generazione del codice effettuato dalla libreria a partire da una semplice pipeline.
 
 L'intero processo segue il flusso dell'applicativo:
 
@@ -2358,7 +2356,7 @@ L'intero processo segue il flusso dell'applicativo:
 
 \subsection{L'input alla libreria}
 
-La pipeline utilizzata come esempio è la seguente:
+La pipeline utilizzata come esempio è mostrata nel Listato~\ref{lst:end-to-end-input}:
 
 \begin{lstlisting}[language=Scala,  label={lst:end-to-end-input}]
 FusedStream.from(numbers)
@@ -2367,7 +2365,7 @@ FusedStream.from(numbers)
   .toArray
 \end{lstlisting}
 
-La macro, riceve l'espressione sotto forma di AST Scala. In particolare il parser riceve:
+La macro riceve l'espressione sotto forma di AST Scala tipizzato; in particolare, il parser riceve l'albero mostrato nel Listato~\ref{lst:end-to-end-ast}:
 
 \begin{lstlisting}[language=Scala,  label={lst:end-to-end-ast}]
 Inlined(
@@ -2453,7 +2451,7 @@ fuse.FusedStream.toArray[scala.Int]
 \end{lstlisting}
 
 \subsection{Il risultato del parsing}
-La prima fase consiste nella traduzione dell'AST Scala nella rappresentazione intermedia ad alto livello descritta nella Sezione~\ref{sec:stream-ir}. La Stream IR corrispondente a~\ref{lst:end-to-end-ast} è:
+La prima fase consiste nella traduzione dell'AST Scala nella rappresentazione intermedia ad alto livello descritta nella Sezione~\ref{sec:stream-ir}. La Stream IR corrispondente all'AST del Listato~\ref{lst:end-to-end-ast} è riportata nel Listato~\ref{lst:end-to-end-parsing}:
 
 \begin{lstlisting}[language=OPIR,caption={Rappresentazione ottenuta al termine del parsing},label={lst:end-to-end-parsing}]
   Filter(
@@ -2473,7 +2471,7 @@ La prima fase consiste nella traduzione dell'AST Scala nella rappresentazione in
 
 \subsection{L'output dell'enrichment}
 
-La \texttt{StreamIR} a~\ref{lst:end-to-end-parsing} viene quindi sottoposta alla fase di enrichment. La \texttt{Enriched StreamIR} risultante è:
+La \texttt{StreamIR} del Listato~\ref{lst:end-to-end-parsing} viene quindi sottoposta alla fase di enrichment (Sezione~\ref{sec:enrichment}). La \texttt{Enriched StreamIR} risultante è illustrata nel Listato~\ref{lst:end-to-end-enrichment}:
 
 \begin{lstlisting}[language=OPIR,caption={StreamIR dopo la fase di enrichment},label={lst:end-to-end-enrichment}]
 declarations = [
@@ -2511,7 +2509,7 @@ streamInfo =
 
 \subsection{Generazione dell'OpIR}
 
-A partire dalla rappresentazione arricchita~\ref{lst:end-to-end-enrichment}, il compilatore determina la strategia con cui attraversare la sorgente ed eseguire le operazioni della pipeline. Il piano di esecuzione assume la forma:
+A partire dalla rappresentazione arricchita del Listato~\ref{lst:end-to-end-enrichment}, il compilatore determina la strategia con cui attraversare la sorgente ed eseguire le operazioni della pipeline. Il piano di esecuzione assume la forma:
 
 \[
   \boxed{
@@ -2534,7 +2532,7 @@ A partire dalla rappresentazione arricchita~\ref{lst:end-to-end-enrichment}, il 
   }
 \]
 
-Il piano di esecuzione viene espresso tramite \texttt{OpIR} come segue:
+Il piano di esecuzione viene espresso tramite \texttt{OpIR} nel Listato~\ref{lst:opir-example}:
 
 \begin{lstlisting}[
   language=OPIR,
@@ -2643,7 +2641,7 @@ L'elenco di operazioni viene poi tradotto nell'AST scala (qui omesso vista la ve
 
 \subsection{Il bytecode JVM generato}
 
-La corretta fusione delle operazioni può essere anche verificata anche ispezionando direttamente il bytecode prodotto dal compiler.
+La corretta fusione delle operazioni può essere verificata anche ispezionando direttamente il bytecode JVM generato (riportato nel Listato~\ref{lst:end-to-end-bytecode}):
 
 \begin{lstlisting}[caption={Estratto del bytecode JVM relativo al corpo della pipeline},label={lst:end-to-end-bytecode}]
 125: iload         10
@@ -2694,10 +2692,52 @@ non corrisponde più all'invocazione di una funzione, ma viene tradotta direttam
 Nel corpo del ciclo non sono presenti invocazioni dinamiche verso le funzioni utilizzate da \texttt{map} e \texttt{filter}. Non compaiono né chiamate a \texttt{Function.apply}, né istruzioni \texttt{invokedynamic} associate alla costruzione o all'invocazione di lambda. Anche la raccolta del risultato è ridotta a operazioni primitive: \texttt{iastore} scrive direttamente il valore trasformato nell'array di output e \texttt{iinc} aggiorna il relativo indice.
 
 \chapter{Validazione e valutazione}
+\label{chap:validazione}
 \section{Strategia di testing}
-\subsection{Test funzionali}
-\subsection{Test di compilazione}
-\subsection{Copertura}
+\label{sec:strategia-testing}
+
+Il testing di una libreria come \texttt{FusedStream} deve affrontare due problemi:
+\begin{enumerate}
+  \item \textbf{Correttezza a runtime}: accertarsi che il codice generato dalle macro produca i risultati attesi, rispetti l'ordine degli elementi e preservi la semantica delle normali collezioni Scala.
+  \item \textbf{Verifica a compile-time}: assicurarsi che le combinazioni non valide vengano intercettate subito dal compilatore, fornendo messaggi di errore chiari ed evitando comportamenti anomali o errori oscuri a runtime.
+\end{enumerate}
+
+I test sono scritti con \texttt{MUnit} e sono organizzati su più livelli separando i controlli interni da quelli sull'API pubblica:
+\begin{itemize}
+  \item \textbf{Unit test interni}: verificano i singoli stadi del motore di compilazione in isolamento.
+  \item \textbf{Test funzionali end-to-end}: compilano ed eseguono pipeline complete scritte tramite l'API pubblica, verificando il risultato dell'esecuzione. Questi test sono suddivisi in quattro suite dedicate:
+        \begin{itemize}
+          \item \texttt{SequentialStreamTest}: trasformazioni sequenziali di base e operatori di slice;
+          \item \texttt{PipelineSemanticsTest}: ordine di valutazione delle espressioni, isolamento dei side-effect e correttezza della fusione;
+          \item \texttt{SourceAndCollectorTest}: sorgenti Scala e Java, ottimizzazioni con accesso diretto alla memoria e collector terminali;
+          \item \texttt{ParallelStreamTest}: partizionamento del carico su più worker, concorrenza e riduzioni parallele.
+        \end{itemize}
+  \item \textbf{Test di compilazione}: verificano che l'uso scorretto dell'API venga bloccato a tempo di compilazione.
+\end{itemize}
+
+\subsubsection{Metriche di copertura}
+
+La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul modulo (\texttt{core}), come riassunto in Tabella~\ref{tab:coverage}. La suite raggiunge una copertura complessiva delle istruzioni del \textbf{95.29\%} (1598 su 1677 istruzioni) e una copertura dei rami decisionali del \textbf{95.19\%} (297 su 312 rami).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Copertura del codice rilevata da \texttt{sbt-scoverage} sul modulo \texttt{core}.}
+  \label{tab:coverage}
+  \vspace{2mm}
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    \textbf{Package / Sottosistema} & \textbf{Istruzioni}  & \textbf{Coverage} & \textbf{Branch coverage} \\
+    \midrule
+    \textsf{fuse.internal.parallel} & 100.00\%             & 100.00\%                                     \\
+    \textsf{fuse.internal.ir}       & 100.00\%             & 100.00\%                                     \\
+    \textsf{fuse.internal}          & 95.76\%              & 93.86\%                                      \\
+    \textsf{fuse} (API pubblica)    & 68.75\%              & 83.33\%                                      \\
+    \midrule
+    \textbf{Totale}                 & \textbf{1598 / 1677} & \textbf{95.29\%}  & \textbf{95.19\%}         \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \section{Analisi del codice generato}
 \subsection{Fusione delle operazioni}
@@ -2713,6 +2753,7 @@ Nel corpo del ciclo non sono presenti invocazioni dinamiche verso le funzioni ut
 \subsection{Allocazioni}
 
 \chapter{Retrospettiva}
+\label{chap:retrospettiva}
 
 \bibliographystyle{plain}
 \bibliography{references}

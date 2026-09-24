@@ -22,6 +22,12 @@ given FromExpr[CompileConfig] with {
             logging <- l.value
           } yield CompileConfig(unsafe, logging)
 
+        case '{ FusedStream.CompileConfig($u, $l) } =>
+          for {
+            unsafe  <- u.value
+            logging <- l.value
+          } yield CompileConfig(unsafe, logging)
+
         // new CompileConfig(unsafe, logging)
         case '{ new CompileConfig($u, $l) } =>
           for {
