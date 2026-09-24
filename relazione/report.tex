@@ -2278,7 +2278,7 @@ combinazione, Il lowering trasforma tale descrizione nel codice concorrente effe
 ParallelCombine.Sum(...)
 ParallelCombine.ArrayConcat(...)
 ParallelCombine.ArrayDirect()
-ParallelCombine.GenricCombiner()
+ParallelCombine.GenericCombiner(...)
 \end{lstlisting}
 
 Nel caso di una somma, ad esempio, viene creato un array contenente un risultato parziale per ciascun chunk:
@@ -2717,7 +2717,7 @@ I test sono scritti con \texttt{MUnit} e sono organizzati su più livelli separa
 
 \subsubsection{Metriche di copertura}
 
-La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul modulo (\texttt{core}), come riassunto in Tabella~\ref{tab:coverage}. La suite raggiunge una copertura complessiva delle istruzioni del \textbf{95.29\%} (1598 su 1677 istruzioni) e una copertura dei rami decisionali del \textbf{95.19\%} (297 su 312 rami).
+La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul modulo (\texttt{core}), come riassunto in Tabella~\ref{tab:coverage}. La suite raggiunge una copertura complessiva delle istruzioni del \textbf{95.05\%} (1708 su 1797 istruzioni) e una copertura dei rami decisionali del \textbf{94.67\%} (320 su 338 rami).
 
 \begin{table}[htbp]
   \centering
@@ -2731,10 +2731,10 @@ La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul mod
     \midrule
     \textsf{fuse.internal.parallel} & 100.00\%             & 100.00\%                                     \\
     \textsf{fuse.internal.ir}       & 100.00\%             & 100.00\%                                     \\
-    \textsf{fuse.internal}          & 95.76\%              & 93.86\%                                      \\
+    \textsf{fuse.internal}          & 95.19\%              & 92.89\%                                      \\
     \textsf{fuse} (API pubblica)    & 68.75\%              & 83.33\%                                      \\
     \midrule
-    \textbf{Totale}                 & \textbf{1598 / 1677} & \textbf{95.29\%}  & \textbf{95.19\%}         \\
+    \textbf{Totale}                 & \textbf{1708 / 1797} & \textbf{95.05\%}  & \textbf{94.67\%}         \\
     \bottomrule
   \end{tabular}
 \end{table}

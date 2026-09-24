@@ -4,6 +4,7 @@ import scala.quoted.*
 import fuse.internal.ir.AnyIR
 import fuse.CollectorBase
 import fuse.Summable
+import fuse.ParallelCollector
 
 // Preserve the identity of the operation IR across lowering and code generation.
 type AnyOPIR = OPIr[?] & Singleton
@@ -17,22 +18,24 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
 
   import quotes.reflect.*
 
-  enum ParallelCombine[T] {
-    case Sum[T <: Summable](zero: Value[T]) extends ParallelCombine[T]
-    case ArrayConcat[T](validSize: Option[Value[Int]])(using val elemType: Type[T]) extends ParallelCombine[Array[T]]
-    case ArrayDirect[T]()(using val elemType: Type[T]) extends ParallelCombine[Array[T]]
+  enum ParallelCombine[LOCAL, OUT] {
+    case Sum[T <: Summable](zero: Value[T]) extends ParallelCombine[T, T]
+    case ArrayConcat[T](validSize: Option[Value[Int]])(using val elemType: Type[T]) extends ParallelCombine[Array[T], Array[T]]
+    case ArrayDirect[T]()(using val elemType: Type[T]) extends ParallelCombine[Array[T], Array[T]]
+    case GenericCombiner[A, Buf, R](collector: Value[ParallelCollector[A, Buf, R]])(using val elemType: Type[A], val bufType: Type[Buf], val resType: Type[R])
+        extends ParallelCombine[Buf, R]
   }
 
   enum Op {
 
-    case Parallel[T](
+    case Parallel[LOCAL, OUT](
         returnSymbol: Symbol,
         collectionSize: Value[Int],
         from: Symbol,
         to: Symbol,
         statements: List[Op],
-        localResult: Value[T],
-        combiner: ParallelCombine[T]
+        localResult: Value[LOCAL],
+        combiner: ParallelCombine[LOCAL, OUT]
     )
 
     case ExternalStatement(statement: Statement)

@@ -7,6 +7,7 @@ import fuse.internal.ir.AnyOPIR
 import fuse.CompileConfig
 import fuse.Summable
 import fuse.CollectorBase
+import fuse.ParallelCollector
 import scala.compiletime.ops.int
 import fuse.internal.ir.ExecutionMode
 
@@ -29,7 +30,11 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     optimizedStream.collectionStrategy.collectionStrategy match {
       case ToArray()                  => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, Array[ELEM]]]).asInstanceOf[Program[OUT]]
       case _: Summing[t]              => generateSummingAccumulator[t](optimizedStream.asInstanceOf[AstExt[t, Nothing, t]])(using elemType.asInstanceOf[Type[t]])
-      case WithCollector(collExpr, _) => generateGenericAccumulator(optimizedStream, collExpr)
+      case WithCollector(collExpr, _) =>
+        executionMode match {
+          case ExecutionMode.Sequential => generateGenericAccumulator(optimizedStream, collExpr)
+          case ExecutionMode.Parallel   => generateParallelGenericAccumulator(optimizedStream, collExpr)
+        }
     }
   }
 
@@ -58,7 +63,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val declarations = getAllDeclarations(optimizedStream)
         val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
 
-        val parallel = Parallel[Array[OUT]](
+        val parallel = Parallel[Array[OUT], Array[OUT]](
           returnSymbol = resultVec,
           collectionSize = ScalaExpr(sourceSize),
           from = fromSymbol,
@@ -97,7 +102,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val declarations = getAllDeclarations(optimizedStream)
         val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
 
-        val parallel = Parallel[Array[OUT]](
+        val parallel = Parallel[Array[OUT], Array[OUT]](
           returnSymbol = resultSymbol,
           collectionSize = ScalaExpr(sourceSize),
           from = fromSymbol,
@@ -123,7 +128,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
         val declarations = getAllDeclarations(optimizedStream)
         val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
-        val parallel = Parallel[Array[OUT]](
+        val parallel = Parallel[Array[OUT], Array[OUT]](
           returnSymbol = resultSymbol,
           collectionSize = ScalaExpr(sourceSize),
           from = fromSymbol,
@@ -263,7 +268,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
         val declarations = getAllDeclarations(optimizedStream)
         val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
-        val parallel = Parallel[T](
+        val parallel = Parallel[T, T](
           returnSymbol = resultSymbol,
           collectionSize = ScalaExpr(sourceSize),
           from = fromSymbol,
@@ -301,6 +306,46 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       )
         ++ List(body), // Corpo dello stream
       result = CollectorFinish(collectorRef, bufferRef)
+    )
+  }
+
+  def generateParallelGenericAccumulator[A: Type, Buf: Type, R: Type](
+      optimizedStream: AstExt[A, Buf, R],
+      collector: Expr[CollectorBase[A, Buf, R]]
+  ): Program[R] = {
+    given Type[ParallelCollector[A, Buf, R]] = Type.of[ParallelCollector[A, Buf, R]]
+    val collectorSymbol = createConstant[ParallelCollector[A, Buf, R]]("collector")
+    val localBufferSymbol = createConstant[Buf]("localBuffer")
+    val resultSymbol = createConstant[R]("parallelResult")
+    val fromSymbol = createConstant[Int]("from")
+    val untilSymbol = createConstant[Int]("until")
+    val collectorRef = SymbolRef[ParallelCollector[A, Buf, R]](collectorSymbol)
+    val localBufferRef = SymbolRef[Buf](localBufferSymbol)
+    // Non posso avere early exit per proprietà dell'input
+    val emit: Emit[A] = emitted => Compute(CollectorAccumulate(collectorRef.asInstanceOf[Value[CollectorBase[A, Buf, R]]], localBufferRef, emitted.elem))
+    val range = Some(SourceRange(SymbolRef[Int](fromSymbol), SymbolRef[Int](untilSymbol)))
+    val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
+    val declarations = getAllDeclarations(optimizedStream)
+    val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
+    val statements = List(
+      Declare(localBufferSymbol, CollectorSupplier(collectorRef.asInstanceOf[Value[CollectorBase[A, Buf, R]]])),
+      body
+    )
+
+    val parallel = Parallel[Buf, R](
+      returnSymbol = resultSymbol,
+      collectionSize = ScalaExpr(sourceSize),
+      from = fromSymbol,
+      to = untilSymbol,
+      statements = statements,
+      localResult = localBufferRef,
+      combiner = ParallelCombine.GenericCombiner[A, Buf, R](collectorRef)
+    )
+
+    Program(
+      statements = declarations
+        ++ List(Declare(collectorSymbol, ScalaExpr(collector.asExprOf[ParallelCollector[A, Buf, R]])), parallel),
+      result = SymbolRef[R](resultSymbol)
     )
   }
 
@@ -513,13 +558,13 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
 
   private def getParallelSourceSize(tree: StreamTree[Phase.Enriched, ?]): Option[Expr[Int]] = {
     tree match {
-      case EnrichedJListSource(term, sizeRef, outType)                                                                         => Some(sizeRef)
-      case EnrichedArraySource(term, sizeRef, outType)                                                                         => Some(sizeRef)
-      case IterableSource(term, outType)                                                                                       => None
-      case JIterableSource(term, outType)                                                                                      => None
-      case Filter(upstream, predicate, outType)                                                                                => getParallelSourceSize(upstream)
-      case Map(upstream, function, inType, outType)                                                                            => getParallelSourceSize(upstream)
-      case EnrichedSlice(upstream, from, until, outType, counterRef)                                                           => None
+      case EnrichedJListSource(term, sizeRef, outType)                                                                       => Some(sizeRef)
+      case EnrichedArraySource(term, sizeRef, outType)                                                                       => Some(sizeRef)
+      case IterableSource(term, outType)                                                                                     => None
+      case JIterableSource(term, outType)                                                                                    => None
+      case Filter(upstream, predicate, outType)                                                                              => getParallelSourceSize(upstream)
+      case Map(upstream, function, inType, outType)                                                                          => getParallelSourceSize(upstream)
+      case EnrichedSlice(upstream, from, until, outType, counterRef)                                                         => None
       case EnrichedFlatMap(upstream, innerStream, inType, outType, binder, innerDeclarations, innerMaterialized, predicates) => getParallelSourceSize(upstream)
     }
   }

@@ -11,6 +11,7 @@ import munit.FunSuite
 import FusedStream.*
 import RuntimeConfig.*
 import fuse.Collector
+import scala.collection.mutable.ListBuffer
 
 /** Test end-to-end per gli stream paralleli di FusedStream:
   * esecuzione parallela con partizionamento dei dati, collector paralleli (toArray, summing),
@@ -204,6 +205,59 @@ class ParallelStreamTest extends FunSuite {
       .collect(Collector.toArray)
 
     assertEquals(result.toList, Nil)
+  }
+
+  test("Parallel stream collects toList with custom combinable collector across map and filter") {
+    given RuntimeConfig = RuntimeConfig.default.copy(workerCount = 3, chunksPerWorker = 2)
+    val nums = (1 to 50).toArray
+
+    val customToList = new ParallelCollector[Int, ListBuffer[Int], List[Int]] {
+      override def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
+      override def accumulator(buf: ListBuffer[Int], elem: Int): Boolean = {
+        buf.addOne(elem)
+        false
+      }
+      override def combine(left: ListBuffer[Int], right: ListBuffer[Int]): ListBuffer[Int] = {
+        left.addAll(right)
+        left
+      }
+      override def finisher(buf: ListBuffer[Int]): List[Int] = buf.toList
+    }
+
+    val result = FusedStream
+      .from(nums)
+      .parallel()
+      .map(_ * 3)
+      .filter(_ % 2 == 0)
+      .collect(customToList)
+
+    val expected = nums.map(_ * 3).filter(_ % 2 == 0).toList
+    assertEquals(result, expected)
+  }
+
+  test("Parallel stream collects empty array with custom combinable collector") {
+    val nums = Array.empty[Int]
+    val customToList = new ParallelCollector[Int, ListBuffer[Int], List[Int]] {
+      override def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
+      override def accumulator(buf: ListBuffer[Int], elem: Int): Boolean = {
+        buf.addOne(elem)
+        false
+      }
+      override def combine(left: ListBuffer[Int], right: ListBuffer[Int]): ListBuffer[Int] = {
+        left.addAll(right)
+        left
+      }
+      override def finisher(buf: ListBuffer[Int]): List[Int] = buf.toList
+    }
+
+    val result = FusedStream
+      .from(nums)
+      .parallel()
+      .map(_ * 3)
+      .filter(_ % 2 == 0)
+      .collect(customToList)
+
+    assertEquals(result, Nil)
   }
 
   for {

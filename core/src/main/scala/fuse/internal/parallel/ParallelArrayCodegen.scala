@@ -14,7 +14,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
   import opIr.Op.*
   import opGenerator.{lowerValue, newArray, processParallelChunks, lowerOp}
 
-  private[internal] def lowerArrayConcat[E: Type](parallel: Parallel[Array[E]], concat: ParallelCombine.ArrayConcat[E]): List[Statement] = {
+  private[internal] def lowerArrayConcat[E: Type](parallel: Parallel[Array[E], Array[E]], concat: ParallelCombine.ArrayConcat[E]): List[Statement] = {
     val sourceSize = lowerValue(parallel.collectionSize)
 
     val resultExpr: Expr[Array[E]] = '{
@@ -41,7 +41,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
   }
 
   private def createArrayChunkProcessingCode[E: Type](
-      parallel: Parallel[Array[E]],
+      parallel: Parallel[Array[E], Array[E]],
       concat: ParallelCombine.ArrayConcat[E],
       chunkIdx: Expr[Int],
       partials: Expr[Array[Array[E]]],
@@ -118,7 +118,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
     }
   }
 
-  private[internal] def lowerArrayDirect[E: Type](parallel: Parallel[Array[E]]): List[Statement] = {
+  private[internal] def lowerArrayDirect[E: Type](parallel: Parallel[Array[E], Array[E]]): List[Statement] = {
     val sourceSize = lowerValue(parallel.collectionSize)
 
     val processExpr: Expr[Unit] = '{
@@ -135,7 +135,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
     List(processExpr.asTerm)
   }
 
-  private def createDirectChunkProcessingCode[E: Type](parallel: Parallel[Array[E]], chunkIdx: Expr[Int], sourceSize: Expr[Int], chunks: Expr[Int]): Expr[Unit] = {
+  private def createDirectChunkProcessingCode[E: Type](parallel: Parallel[Array[E], Array[E]], chunkIdx: Expr[Int], sourceSize: Expr[Int], chunks: Expr[Int]): Expr[Unit] = {
     val from = '{ ($chunkIdx.toLong * $sourceSize / $chunks).toInt }
     val until = '{ ((($chunkIdx + 1).toLong * $sourceSize) / $chunks).toInt }
     val fromDef = ValDef(parallel.from, Some(from.asTerm))

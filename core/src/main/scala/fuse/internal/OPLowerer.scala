@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
 import fuse.internal.parallel.ParallelSumCodegen
 import fuse.internal.parallel.ParallelArrayCodegen
+import fuse.internal.parallel.ParallelCombinerCodegen
 import scala.annotation.static
 import java.util.concurrent.atomic.AtomicReference
 
@@ -44,17 +45,25 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
 
   def lowerOp(op: Op): List[Statement] = {
     op match {
-      case parallel: Parallel[t] => {
-        given Type[t] = parallel.localResult.valueType
+      case parallel: Parallel[loc, res] => {
         parallel.combiner match {
-          case sum: ParallelCombine.Sum[t]            => new ParallelSumCodegen[OPIR, this.type](conf, this).lowerParallelSum(parallel)
+          case sum: ParallelCombine.Sum[t] => {
+            given Type[t] = sum.zero.valueType
+            new ParallelSumCodegen[OPIR, this.type](conf, this).lowerParallelSum(parallel.asInstanceOf[Parallel[t, t]])
+          }
           case concat: ParallelCombine.ArrayConcat[e] => {
             given Type[e] = concat.elemType
-            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayConcat[e](parallel.asInstanceOf[Parallel[Array[e]]], concat)
+            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayConcat[e](parallel.asInstanceOf[Parallel[Array[e], Array[e]]], concat)
           }
           case arrayDirect: ParallelCombine.ArrayDirect[e] => {
             given Type[e] = arrayDirect.elemType
-            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayDirect[e](parallel.asInstanceOf[Parallel[Array[e]]])
+            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayDirect[e](parallel.asInstanceOf[Parallel[Array[e], Array[e]]])
+          }
+          case combiner: ParallelCombine.GenericCombiner[a, buf, r] => {
+            given Type[a] = combiner.elemType
+            given Type[buf] = combiner.bufType
+            given Type[r] = combiner.resType
+            new ParallelCombinerCodegen[OPIR, this.type](conf, this).lowerGenericCombiner[a, buf, r](parallel.asInstanceOf[Parallel[buf, r]], combiner)
           }
         }
       }
