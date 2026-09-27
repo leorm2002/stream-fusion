@@ -6,27 +6,44 @@ import org.openjdk.jmh.annotations.*
 import scala.compiletime.uninitialized
 
 @State(Scope.Thread)
+/** Base class with all the data to execute the benchamrks
+  */
 class BenchmarkData {
-  @Param(Array("1000", "100000"))
+  @Param(Array("10", "100", "1000", "100000"))
   var size: Int = uninitialized
 
-  var scalaStrings: List[String] = uninitialized
-  var scalaPeople: List[Person] = uninitialized
-  var scalaPoints: List[Point] = uninitialized
+  var transactions: ArrayList[Transaction] = uninitialized
+  var transactionsArray: Array[Transaction] = uninitialized
 
-  var javaStrings: JList[String] = uninitialized
-  var javaPeople: JList[Person] = uninitialized
-  var javaPoints: JList[Point] = uninitialized
+  // Parameter fields for capturing lambda benchmarks
+  var targetCategoryElectronics: String = "Electronics"
+  var targetStatusCompleted: Int = 1
+  var targetCategoryGroceries: String = "Groceries"
+  var minAmountGroceries: Double = 50.0
+  var cashbackRate: Double = 0.05
+  var targetStatusRefunded: Int = 2
+  var vipMaxUserId: Int = 200
+  var penaltyRate: Double = 0.1
+  var targetCategoryFashion: String = "Fashion"
+  var minAmountFashion: Double = 20.0
+  var maxAmountFashion: Double = 200.0
+  var vatRate: Double = 0.22
+  var targetStatusPending: Int = 0
+  var targetCategoryBooks: String = "Books"
+  var maxAmountBooks: Double = 30.0
+  var shippingFee: Double = 2.5
+  var targetCategoryHome: String = "Home"
+  var minAmountHome: Double = 150.0
+  var discountRate: Double = 0.9
+  var sampleModulo: Int = 5
+  var markupRate: Double = 1.05
 
   @Setup(Level.Trial)
   def setup(): Unit = {
-    val strings = List.newBuilder[String]
-    val people = List.newBuilder[Person]
-    val points = List.newBuilder[Point]
+    val txs = new ArrayList[Transaction](size)
+    val txArray = new Array[Transaction](size)
 
-    val jStrings = new ArrayList[String](size)
-    val jPeople = new ArrayList[Person](size)
-    val jPoints = new ArrayList[Point](size)
+    val categories = Array("Electronics", "Groceries", "Fashion", "Books", "Home")
 
     var i = 0
     while (i < size) {
@@ -36,22 +53,20 @@ class BenchmarkData {
         if (i % 4 == 0) -i - 1 else i,
         if (i % 7 == 0) -i - 1 else i
       )
+      val txValue = new Transaction(
+        i.toLong,
+        i % 1000,
+        ((i * 17) % 500) + 0.99,
+        categories(i % categories.length),
+        i % 4
+      )
 
-      strings += stringValue
-      people += personValue
-      points += pointValue
-
-      jStrings.add(stringValue)
-      jPeople.add(personValue)
-      jPoints.add(pointValue)
+      txs.add(txValue)
+      txArray(i) = txValue
       i += 1
     }
 
-    scalaStrings = strings.result()
-    scalaPeople = people.result()
-    scalaPoints = points.result()
-    javaStrings = jStrings
-    javaPeople = jPeople
-    javaPoints = jPoints
+    transactions = txs
+    transactionsArray = txArray
   }
 }

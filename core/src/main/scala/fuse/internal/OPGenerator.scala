@@ -467,7 +467,9 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     val list = ScalaExpr(source.term)
     val indexSymbol = createVariable[Int]("i")
     val indexRef = SymbolRef[Int](indexSymbol)
-    val condition = LessThan(SymbolRef(indexSymbol), ScalaExpr(source.sizeRef))
+    val start = range.map(_.from).getOrElse(ConstantVal(0))
+    val end = range.map(_.until).getOrElse(ScalaExpr(source.sizeRef))
+    val condition = LessThan(indexRef, end)
 
     if (compileCfg.useUnsafe) {
       val rawSymbol = createConstant[Array[AnyRef]]("raw")
@@ -475,11 +477,11 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       CodeBlock(
         List(
           Declare(rawSymbol, ArrayListRawArray(list)),
-          buildSourceLoop(condition, AsInstanceOf[OUT](ArrayRead(rawRef, indexRef)), emit, exitPredicates, Some(indexSymbol))
+          buildSourceLoop(condition, AsInstanceOf[OUT](ArrayRead(rawRef, indexRef)), emit, exitPredicates, Some(indexSymbol), start)
         )
       )
     } else {
-      buildSourceLoop(condition, JListRead(list, indexRef), emit, exitPredicates, Some(indexSymbol))
+      buildSourceLoop(condition, JListRead(list, indexRef), emit, exitPredicates, Some(indexSymbol), start)
     }
   }
 

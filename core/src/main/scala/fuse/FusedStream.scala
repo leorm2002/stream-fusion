@@ -22,6 +22,11 @@ object FusedStream {
   @compileTimeOnly("FusedStream.from can only be used in a pipeline terminated by .collect(...)")
   def from[A](source: Array[A]): ParallelizableSource[A] = compileTimeOnly
 
+  /** Creates a stream from an ArrayList, allowing parallel execution and direct backing-array access
+    */
+  @compileTimeOnly("FusedStream.from can only be used in a pipeline terminated by .collect(...)")
+  def from[A](source: java.util.ArrayList[A]): ParallelizableSource[A] = compileTimeOnly
+
   /** Creates a stream from a single element, will throw an exception if the source element is null
     * @param source
     *   the only element in the stream, must not be null

@@ -1,18 +1,33 @@
 package runner
 
 import fuse.FusedStream.*
+import fuse.ParallelCollector
+import scala.collection.mutable.ListBuffer
 
 @main def hello(): Unit = {
-  // val numbers = List(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-  val numbers: java.util.List[Int] = new java.util.ArrayList[Int]();
-  numbers.addAll(java.util.List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+  given RuntimeConfig = RuntimeConfig.default.copy(workerCount = 3, chunksPerWorker = 2)
+  val nums = (1 to 50).toArray
+
+  val customToList = new ParallelCollector[Int, ListBuffer[Int], List[Int]] {
+    override def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
+    override def accumulator(buf: ListBuffer[Int], elem: Int): Boolean = {
+      buf.addOne(elem)
+      false
+    }
+    override def combine(left: ListBuffer[Int], right: ListBuffer[Int]): ListBuffer[Int] = {
+      left.addAll(right)
+      left
+    }
+    override def finisher(buf: ListBuffer[Int]): List[Int] = buf.toList
+  }
 
   val result = FusedStream
-    .from(numbers)
-    .map(i => i * 2)
-    .filter(i => i % 2 == 0)
-    .collect(toArray)
+    .from(nums)
+    .parallel()
+    .map(_ * 3)
+    .filter(_ % 2 == 0)
+    .collect(customToList)
 
-  println(result)
+  val expected = nums.map(_ * 3).filter(_ % 2 == 0).toList
 
 }

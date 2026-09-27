@@ -355,6 +355,18 @@ class ParallelStreamTest extends FunSuite {
     }
   }
 
+  test("parallel sum from java.util.ArrayList matches sequential result") {
+    val list = new java.util.ArrayList[Int]()
+    var i = 1
+    while (i <= 1000) {
+      list.add(i)
+      i += 1
+    }
+    val parallelSum = FusedStream.from(list).parallel().filter(_ % 2 == 0).map(_ * 2).collect(Collector.summing)
+    val expected = (1 to 1000).filter(_ % 2 == 0).map(_ * 2).sum
+    assertEquals(parallelSum, expected)
+  }
+
   private def withRuntime(workers: Int)(check: RuntimeConfig => Unit): Unit = {
     val pool = new ForkJoinPool(math.min(workers, 4))
     try {
