@@ -14,72 +14,72 @@
 \contentsline {subsection}{\numberline {3.1.2}Pull stream}{9}{subsection.3.1.2}%
 \contentsline {section}{\numberline {3.2}Metaprogrammazione in Scala 3}{9}{section.3.2}%
 \contentsline {subsection}{\numberline {3.2.1}Introduzione alla Multi-stage programming in Scala 3}{9}{subsection.3.2.1}%
-\contentsline {section}{\numberline {3.3}Metaprogrammazione generativa e analitica}{9}{section.3.3}%
-\contentsline {subsection}{\numberline {3.3.1}La reflection API e l'AST tipizzato}{10}{subsection.3.3.1}%
-\contentsline {subsection}{\numberline {3.3.2}Tipi staged e tipi riflessivi}{10}{subsection.3.3.2}%
-\contentsline {subsection}{\numberline {3.3.3}Beta reduction delle funzioni}{11}{subsection.3.3.3}%
-\contentsline {section}{\numberline {3.4}Definizione di variabili}{11}{section.3.4}%
-\contentsline {chapter}{\numberline {4}Design architetturale}{12}{chapter.4}%
-\contentsline {section}{\numberline {4.1}Architettura generale}{12}{section.4.1}%
-\contentsline {section}{\numberline {4.2}Componenti del sistema}{12}{section.4.2}%
-\contentsline {section}{\numberline {4.3}Architettura del compilatore}{13}{section.4.3}%
-\contentsline {chapter}{\numberline {5}Design di dettaglio}{14}{chapter.5}%
-\contentsline {section}{\numberline {5.1}Design dell'API pubblica}{14}{section.5.1}%
-\contentsline {subsection}{\numberline {5.1.1}Operazioni terminali}{14}{subsection.5.1.1}%
-\contentsline {subsubsection}{Collector combinabili e parallelismo}{15}{section*.2}%
-\contentsline {subsubsection}{Collector specializzati}{15}{section*.3}%
-\contentsline {subsection}{\numberline {5.1.2}Creazione dello stream: \texttt {from}}{15}{subsection.5.1.2}%
-\contentsline {subsection}{\numberline {5.1.3}Tipologie di stream}{15}{subsection.5.1.3}%
-\contentsline {subsection}{\numberline {5.1.4}Operazione terminale \texttt {collect}}{16}{subsection.5.1.4}%
-\contentsline {subsection}{\numberline {5.1.5}Configurazione compile-time e runtime}{17}{subsection.5.1.5}%
-\contentsline {subsection}{\numberline {5.1.6}Import semplificato dell'API}{17}{subsection.5.1.6}%
-\contentsline {section}{\numberline {5.2}Design della Stream IR}{17}{section.5.2}%
-\contentsline {subsection}{\numberline {5.2.1}Struttura dell'albero}{18}{subsection.5.2.1}%
-\contentsline {section}{\numberline {5.3}Rappresentazione per la Code Generation (OP Ir)}{18}{section.5.3}%
-\contentsline {subsection}{\numberline {5.3.1}Valori}{19}{subsection.5.3.1}%
-\contentsline {subsection}{\numberline {5.3.2}Operazioni}{20}{subsection.5.3.2}%
-\contentsline {section}{\numberline {5.4}La collection strategy}{20}{section.5.4}%
-\contentsline {chapter}{\numberline {6}Implementazione}{21}{chapter.6}%
-\contentsline {section}{\numberline {6.1}Parsing}{21}{section.6.1}%
-\contentsline {subsection}{\numberline {6.1.1}Parsing della stream}{21}{subsection.6.1.1}%
-\contentsline {subsubsection}{Rappresentazione del risultato del parsing}{21}{section*.4}%
-\contentsline {subsubsection}{Riconoscimento delle operazioni}{21}{section*.5}%
-\contentsline {subsubsection}{Parsing ricorsivo di \texttt {flatMap}}{22}{section*.6}%
-\contentsline {subsection}{\numberline {6.1.2}Parsing del collector}{22}{subsection.6.1.2}%
-\contentsline {subsection}{\numberline {6.1.3}Parsing della configurazione statica}{23}{subsection.6.1.3}%
-\contentsline {section}{\numberline {6.2}Enrichment}{23}{section.6.2}%
-\contentsline {subsection}{\numberline {6.2.1}Materializzazione delle espressioni}{24}{subsection.6.2.1}%
-\contentsline {subsection}{\numberline {6.2.2}Stato e condizioni di terminazione}{24}{subsection.6.2.2}%
-\contentsline {subsection}{\numberline {6.2.3}Analisi della cardinalità}{24}{subsection.6.2.3}%
-\contentsline {section}{\numberline {6.3}Traduzione in OP IR}{25}{section.6.3}%
-\contentsline {subsection}{\numberline {6.3.1}Selezione della strategia terminale}{25}{subsection.6.3.1}%
-\contentsline {subsection}{\numberline {6.3.2}Materializzazione del risultato}{25}{subsection.6.3.2}%
-\contentsline {subsection}{\numberline {6.3.3}Generazione della pipeline e delle sorgenti}{26}{subsection.6.3.3}%
-\contentsline {subsection}{\numberline {6.3.4}Generazione del piano parallelo}{27}{subsection.6.3.4}%
-\contentsline {section}{\numberline {6.4}Lowering}{27}{section.6.4}%
-\contentsline {subsection}{\numberline {6.4.1}Traduzione dell'OP IR}{27}{subsection.6.4.1}%
-\contentsline {subsection}{\numberline {6.4.2}Applicazione e inlining delle funzioni}{28}{subsection.6.4.2}%
-\contentsline {subsection}{\numberline {6.4.3}Lowering del parallelismo}{28}{subsection.6.4.3}%
-\contentsline {section}{\numberline {6.5}Esempio di traduzione end-to-end}{29}{section.6.5}%
-\contentsline {subsection}{\numberline {6.5.1}L'input alla libreria}{29}{subsection.6.5.1}%
-\contentsline {subsection}{\numberline {6.5.2}Il risultato del parsing}{31}{subsection.6.5.2}%
-\contentsline {subsection}{\numberline {6.5.3}L'output dell'enrichment}{31}{subsection.6.5.3}%
-\contentsline {subsection}{\numberline {6.5.4}Generazione dell'OpIR}{32}{subsection.6.5.4}%
-\contentsline {subsection}{\numberline {6.5.5}Lowering verso l'AST Scala}{33}{subsection.6.5.5}%
-\contentsline {subsection}{\numberline {6.5.6}Il bytecode JVM generato}{34}{subsection.6.5.6}%
-\contentsline {chapter}{\numberline {7}Testing e valutazione delle prestazioni}{35}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Testing}{35}{section.7.1}%
-\contentsline {subsubsection}{Metriche di copertura}{35}{section*.7}%
-\contentsline {section}{\numberline {7.2}Valutazione delle prestazioni}{36}{section.7.2}%
-\contentsline {subsection}{\numberline {7.2.1}Metodologia}{36}{subsection.7.2.1}%
-\contentsline {subsection}{\numberline {7.2.2}Benchmark sequenziali}{36}{subsection.7.2.2}%
-\contentsline {subsubsection}{Scenario Monomorfico}{36}{section*.8}%
-\contentsline {subsubsection}{Scenario Megamorfico (Carico applicativo reale)}{37}{section*.9}%
-\contentsline {subsection}{\numberline {7.2.3}Benchmark paralleli}{37}{subsection.7.2.3}%
-\contentsline {subsection}{\numberline {7.2.4}Comportamento a freddo e livelli di compilazione JIT}{38}{subsection.7.2.4}%
-\contentsline {subsection}{\numberline {7.2.5}Impatto delle closure: il caso delle Capturing Lambdas}{39}{subsection.7.2.5}%
-\contentsline {subsection}{\numberline {7.2.6}Allocazioni e comportamento del Garbage Collector}{40}{subsection.7.2.6}%
-\contentsline {chapter}{\numberline {8}Retrospettiva}{42}{chapter.8}%
-\contentsline {section}{\numberline {8.1}Limiti e compromessi progettuali}{42}{section.8.1}%
-\contentsline {section}{\numberline {8.2}Sviluppi futuri}{42}{section.8.2}%
-\contentsline {section}{\numberline {8.3}Conclusioni}{43}{section.8.3}%
+\contentsline {section}{\numberline {3.3}Metaprogrammazione analitica}{10}{section.3.3}%
+\contentsline {subsection}{\numberline {3.3.1}La reflection API e l'AST tipizzato}{11}{subsection.3.3.1}%
+\contentsline {subsection}{\numberline {3.3.2}Tipi staged e tipi riflessivi}{11}{subsection.3.3.2}%
+\contentsline {subsection}{\numberline {3.3.3}Beta reduction delle funzioni}{12}{subsection.3.3.3}%
+\contentsline {section}{\numberline {3.4}Definizione di variabili}{12}{section.3.4}%
+\contentsline {chapter}{\numberline {4}Design architetturale}{13}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Architettura generale}{13}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Componenti del sistema}{13}{section.4.2}%
+\contentsline {section}{\numberline {4.3}Architettura del compilatore}{14}{section.4.3}%
+\contentsline {chapter}{\numberline {5}Design di dettaglio}{15}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Design dell'API pubblica}{15}{section.5.1}%
+\contentsline {subsection}{\numberline {5.1.1}Operazioni terminali}{15}{subsection.5.1.1}%
+\contentsline {subsubsection}{Collector combinabili e parallelismo}{16}{section*.2}%
+\contentsline {subsubsection}{Intrinsic vs. first-class collectors}{16}{section*.3}%
+\contentsline {subsection}{\numberline {5.1.2}Tipologie di stream}{16}{subsection.5.1.2}%
+\contentsline {subsection}{\numberline {5.1.3}Vincoli negativi sui tipi}{16}{subsection.5.1.3}%
+\contentsline {subsection}{\numberline {5.1.4}Operazione terminale \texttt {collect}}{17}{subsection.5.1.4}%
+\contentsline {subsection}{\numberline {5.1.5}Configurazione compile-time e runtime}{18}{subsection.5.1.5}%
+\contentsline {subsection}{\numberline {5.1.6}Import semplificato dell'API}{18}{subsection.5.1.6}%
+\contentsline {section}{\numberline {5.2}Design della Stream IR}{18}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}Struttura dell'albero}{19}{subsection.5.2.1}%
+\contentsline {section}{\numberline {5.3}Rappresentazione per la Code Generation (OP Ir)}{20}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}Valori}{20}{subsection.5.3.1}%
+\contentsline {subsection}{\numberline {5.3.2}Operazioni}{21}{subsection.5.3.2}%
+\contentsline {section}{\numberline {5.4}La collection strategy}{21}{section.5.4}%
+\contentsline {chapter}{\numberline {6}Implementazione}{23}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Parsing}{23}{section.6.1}%
+\contentsline {subsection}{\numberline {6.1.1}Parsing della stream}{23}{subsection.6.1.1}%
+\contentsline {subsubsection}{Rappresentazione del risultato del parsing}{23}{section*.4}%
+\contentsline {subsubsection}{Riconoscimento delle operazioni}{23}{section*.5}%
+\contentsline {subsubsection}{Parsing ricorsivo di \texttt {flatMap}}{24}{section*.6}%
+\contentsline {subsection}{\numberline {6.1.2}Parsing del collector}{24}{subsection.6.1.2}%
+\contentsline {subsection}{\numberline {6.1.3}Parsing della configurazione statica}{25}{subsection.6.1.3}%
+\contentsline {section}{\numberline {6.2}Enrichment}{25}{section.6.2}%
+\contentsline {subsection}{\numberline {6.2.1}Materializzazione delle espressioni}{26}{subsection.6.2.1}%
+\contentsline {subsection}{\numberline {6.2.2}Stato e condizioni di terminazione}{26}{subsection.6.2.2}%
+\contentsline {subsection}{\numberline {6.2.3}Analisi della cardinalità}{26}{subsection.6.2.3}%
+\contentsline {section}{\numberline {6.3}Traduzione in OP IR}{27}{section.6.3}%
+\contentsline {subsection}{\numberline {6.3.1}Selezione della strategia terminale}{27}{subsection.6.3.1}%
+\contentsline {subsection}{\numberline {6.3.2}Materializzazione del risultato}{27}{subsection.6.3.2}%
+\contentsline {subsection}{\numberline {6.3.3}Generazione della pipeline e delle sorgenti}{28}{subsection.6.3.3}%
+\contentsline {subsection}{\numberline {6.3.4}Generazione del piano parallelo}{29}{subsection.6.3.4}%
+\contentsline {section}{\numberline {6.4}Lowering}{29}{section.6.4}%
+\contentsline {subsection}{\numberline {6.4.1}Traduzione dell'OP IR}{29}{subsection.6.4.1}%
+\contentsline {subsection}{\numberline {6.4.2}Applicazione e inlining delle funzioni}{30}{subsection.6.4.2}%
+\contentsline {subsection}{\numberline {6.4.3}Lowering del parallelismo}{30}{subsection.6.4.3}%
+\contentsline {section}{\numberline {6.5}Esempio di traduzione end-to-end}{31}{section.6.5}%
+\contentsline {subsection}{\numberline {6.5.1}L'input alla libreria}{31}{subsection.6.5.1}%
+\contentsline {subsection}{\numberline {6.5.2}Il risultato del parsing}{33}{subsection.6.5.2}%
+\contentsline {subsection}{\numberline {6.5.3}L'output dell'enrichment}{33}{subsection.6.5.3}%
+\contentsline {subsection}{\numberline {6.5.4}Generazione dell'OpIR}{34}{subsection.6.5.4}%
+\contentsline {subsection}{\numberline {6.5.5}Lowering verso l'AST Scala}{35}{subsection.6.5.5}%
+\contentsline {subsection}{\numberline {6.5.6}Il bytecode JVM generato}{36}{subsection.6.5.6}%
+\contentsline {chapter}{\numberline {7}Testing e valutazione delle prestazioni}{37}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Testing}{37}{section.7.1}%
+\contentsline {subsubsection}{Metriche di copertura}{37}{section*.7}%
+\contentsline {section}{\numberline {7.2}Valutazione delle prestazioni}{38}{section.7.2}%
+\contentsline {subsection}{\numberline {7.2.1}Metodologia}{38}{subsection.7.2.1}%
+\contentsline {subsection}{\numberline {7.2.2}Benchmark sequenziali}{38}{subsection.7.2.2}%
+\contentsline {subsubsection}{Scenario Monomorfico}{38}{section*.8}%
+\contentsline {subsubsection}{Scenario Megamorfico (Carico applicativo reale)}{39}{section*.9}%
+\contentsline {subsection}{\numberline {7.2.3}Benchmark paralleli}{39}{subsection.7.2.3}%
+\contentsline {subsection}{\numberline {7.2.4}Comportamento a freddo e livelli di compilazione JIT}{40}{subsection.7.2.4}%
+\contentsline {subsection}{\numberline {7.2.5}Impatto delle closure: il caso delle Capturing Lambdas}{41}{subsection.7.2.5}%
+\contentsline {subsection}{\numberline {7.2.6}Allocazioni e comportamento del Garbage Collector}{42}{subsection.7.2.6}%
+\contentsline {chapter}{\numberline {8}Retrospettiva}{44}{chapter.8}%
+\contentsline {section}{\numberline {8.1}Limiti e compromessi progettuali}{44}{section.8.1}%
+\contentsline {section}{\numberline {8.2}Sviluppi futuri}{44}{section.8.2}%
+\contentsline {section}{\numberline {8.3}Conclusioni}{45}{section.8.3}%
