@@ -149,11 +149,15 @@ private[internal] class StreamIr(using val quotes: Quotes) {
 
   /** These are used in all the phases of the compiler, here to simplify invocation */
 
-  def createConstant[T: Type](name: String) = {
+  def createConstant[T: Type](name: String): Symbol =
+    createConstant(name, TypeRepr.of[T])
+
+  /** Creates an immutable binding while preserving a type obtained through reflection. */
+  def createConstant(name: String, tpe: TypeRepr): Symbol = {
     Symbol.newVal(
       parent = Symbol.spliceOwner,
       name = Symbol.freshName(name),
-      tpe = TypeRepr.of[T],
+      tpe = tpe,
       flags = Flags.EmptyFlags,
       privateWithin = Symbol.noSymbol
     )

@@ -13,7 +13,7 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
   import opIr.*
   import opIr.quotes.reflect.*
   import opIr.Op.*
-  import opGenerator.{lowerValue, newArray, processParallelChunks, lowerOp}
+  import opGenerator.{lowerValue, newArray, processParallelChunks, lowerOp, lowerSupplier, lowerFinish, lowerCombine}
 
   private[internal] def lowerGenericCombiner[A: Type, Buf: Type, R: Type](parallel: Parallel[Buf, R], combiner: ParallelCombine.GenericCombiner[A, Buf, R]): List[Statement] = {
     val sourceSize = lowerValue(parallel.collectionSize)
@@ -24,11 +24,10 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
       val chunks = OPCodeGenerator.computeCount(size, $conf)
       val workers = math.min($conf.workerCount, chunks)
       val partials = ${ newArray[Buf]('{ chunks }) }
-      val coll = $collector
 
       // Se no ho nessun chunk non faccio nulla
       if (chunks == 0) {
-        coll.finisher(coll.supplier())
+        ${ lowerFinish[R](collector, lowerSupplier[Buf](collector)) }
       } else {
 
         ${
@@ -40,10 +39,10 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
         var acc = partials(0)
         var i = 1
         while (i < chunks) {
-          acc = coll.combine(acc, partials(i))
+          acc = ${ lowerCombine[Buf](collector, '{ acc }, '{ partials(i) }) }
           i += 1
         }
-        coll.finisher(acc)
+        ${ lowerFinish[R](collector, '{ acc }) }
       }
     }
 

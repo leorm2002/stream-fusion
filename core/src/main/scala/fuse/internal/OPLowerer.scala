@@ -24,6 +24,21 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
 
   private var conf: Expr[RuntimeConfig] = scala.compiletime.uninitialized
 
+  private[internal] def lowerSupplier[Buf: Type](collector: Expr[?]): Expr[Buf] =
+    lowerCollectorCall[Buf](collector, "supplier", Nil)
+
+  private[internal] def lowerAccumulate(collector: Expr[?], buffer: Expr[?], elem: Expr[?]): Expr[Boolean] =
+    lowerCollectorCall[Boolean](collector, "accumulator", List(buffer.asTerm, elem.asTerm))
+
+  private[internal] def lowerFinish[R: Type](collector: Expr[?], buffer: Expr[?]): Expr[R] =
+    lowerCollectorCall[R](collector, "finisher", List(buffer.asTerm))
+
+  private[internal] def lowerCombine[Buf: Type](collector: Expr[?], left: Expr[Buf], right: Expr[Buf]): Expr[Buf] =
+    lowerCollectorCall[Buf](collector, "combine", List(left.asTerm, right.asTerm))
+
+  // Build the call using the concrete receiver type so Scala can expand inline methods.
+  private def lowerCollectorCall[T: Type](collector: Expr[?], name: String, arguments: List[Term]): Expr[T] = Select.overloaded(collector.asTerm, name, Nil, arguments).asExprOf[T]
+
   def lower[OUT](program: Program[OUT])(using Type[OUT]): Expr[OUT] = {
     '{
       val conff = $runCfg
@@ -243,7 +258,7 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
         given Type[buf] = supplier.valueType
         given Type[r] = supplier.resultType
         val collector = lowerValue(supplier.collector)
-        '{ $collector.supplier() }.asExprOf[T]
+        lowerSupplier[buf](collector).asExprOf[T]
 
       case accumulate: CollectorAccumulate[a, buf, r] =>
         given Type[a] = accumulate.elemType
@@ -252,7 +267,7 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
         val collector = lowerValue(accumulate.collector)
         val buffer = lowerValue(accumulate.buffer)
         val elem = lowerValue(accumulate.elem)
-        '{ $collector.accumulator($buffer, $elem) }.asExprOf[T]
+        lowerAccumulate(collector, buffer, elem).asExprOf[T]
 
       case finish: CollectorFinish[a, buf, r] =>
         given Type[a] = finish.elemType
@@ -260,7 +275,7 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
         given Type[r] = finish.valueType
         val collector = lowerValue(finish.collector)
         val buffer = lowerValue(finish.buffer)
-        '{ $collector.finisher($buffer) }.asExprOf[T]
+        lowerFinish[r](collector, buffer).asExprOf[T]
 
       case app: ApplyFun[in, out] =>
         given Type[in] = app.inType

@@ -283,7 +283,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   }
 
   def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, Buf, R], collector: Expr[CollectorBase[A, Buf, R]]): Program[R] = {
-    val collectorSymbol = createConstant[CollectorBase[A, Buf, R]]("collector")
+    val collectorSymbol = createConstant("collector", collector.asTerm.tpe.widen)
     val bufferSymbol = createConstant[Buf]("buffer")
     val collectorRef = SymbolRef[CollectorBase[A, Buf, R]](collectorSymbol)
     val bufferRef = SymbolRef[Buf](bufferSymbol)
@@ -314,7 +314,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       collector: Expr[CollectorBase[A, Buf, R]]
   ): Program[R] = {
     given Type[ParallelCollector[A, Buf, R]] = Type.of[ParallelCollector[A, Buf, R]]
-    val collectorSymbol = createConstant[ParallelCollector[A, Buf, R]]("collector")
+    val collectorSymbol = createConstant("collector", collector.asTerm.tpe.widen)
     val localBufferSymbol = createConstant[Buf]("localBuffer")
     val resultSymbol = createConstant[R]("parallelResult")
     val fromSymbol = createConstant[Int]("from")
