@@ -64,7 +64,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val declarations = getAllDeclarations(optimizedStream)
         val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
 
-        val parallel = Parallel[Array[OUT], Array[OUT]](
+        val parallel = Parallel[Array[OUT]](
           returnSymbol = resultVec,
           collectionSize = ScalaExpr(sourceSize),
           from = fromSymbol,
@@ -102,7 +102,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val declarations = getAllDeclarations(optimizedStream)
         val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
 
-        val parallel = Parallel[Array[OUT], Array[OUT]](
+        val parallel = Parallel[Array[OUT]](
           returnSymbol = resultSymbol,
           collectionSize = ScalaExpr(sourceSize),
           from = fromSymbol,
@@ -127,7 +127,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
         val declarations = getAllDeclarations(optimizedStream)
         val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
-        val parallel = Parallel[Array[OUT], Array[OUT]](
+        val parallel = Parallel[Array[OUT]](
           returnSymbol = resultSymbol,
           collectionSize = ScalaExpr(sourceSize),
           from = fromSymbol,
@@ -266,7 +266,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
         val declarations = getAllDeclarations(optimizedStream)
         val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
-        val parallel = Parallel[T, T](
+        val parallel = Parallel[T](
           returnSymbol = resultSymbol,
           collectionSize = ScalaExpr(sourceSize),
           from = fromSymbol,
@@ -329,7 +329,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       body
     )
 
-    val parallel = Parallel[Buf, R](
+    val parallel = Parallel[R](
       returnSymbol = resultSymbol,
       collectionSize = ScalaExpr(sourceSize),
       from = fromSymbol,

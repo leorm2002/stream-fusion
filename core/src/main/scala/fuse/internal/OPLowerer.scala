@@ -60,25 +60,25 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
 
   def lowerOp(op: Op): List[Statement] = {
     op match {
-      case parallel: Parallel[loc, res] => {
+      case parallel: Parallel[res] => {
         parallel.combiner match {
           case sum: ParallelCombine.Sum[t] => {
             given Type[t] = sum.zero.valueType
-            new ParallelSumCodegen[OPIR, this.type](conf, this).lowerParallelSum(parallel.asInstanceOf[Parallel[t, t]], sum)
+            new ParallelSumCodegen[OPIR, this.type](conf, this).lowerParallelSum(parallel, sum)
           }
           case concat: ParallelCombine.ArrayConcat[e] => {
             given Type[e] = concat.elemType
-            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayConcat[e](parallel.asInstanceOf[Parallel[Array[e], Array[e]]], concat)
+            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayConcat[e](parallel, concat)
           }
           case arrayDirect: ParallelCombine.ArrayDirect[e] => {
             given Type[e] = arrayDirect.elemType
-            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayDirect[e](parallel.asInstanceOf[Parallel[Array[e], Array[e]]])
+            new ParallelArrayCodegen[OPIR, this.type](conf, this).lowerArrayDirect[e](parallel)
           }
           case combiner: ParallelCombine.GenericCombiner[a, buf, r] => {
             given Type[a] = combiner.elemType
             given Type[buf] = combiner.bufType
             given Type[r] = combiner.resType
-            new ParallelCombinerCodegen[OPIR, this.type](conf, this).lowerGenericCombiner[a, buf, r](parallel.asInstanceOf[Parallel[buf, r]], combiner)
+            new ParallelCombinerCodegen[OPIR, this.type](conf, this).lowerGenericCombiner[a, buf, r](parallel, combiner)
           }
         }
       }

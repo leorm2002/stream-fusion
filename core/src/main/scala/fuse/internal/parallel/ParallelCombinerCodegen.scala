@@ -15,7 +15,7 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
   import opIr.Op.*
   import opGenerator.{lowerValue, newArray, processParallelChunks, lowerOp, lowerSupplier, lowerFinish, lowerCombine}
 
-  private[internal] def lowerGenericCombiner[A: Type, Buf: Type, R: Type](parallel: Parallel[Buf, R], combiner: ParallelCombine.GenericCombiner[A, Buf, R]): List[Statement] = {
+  private[internal] def lowerGenericCombiner[A: Type, Buf: Type, R: Type](parallel: Parallel[R], combiner: ParallelCombine.GenericCombiner[A, Buf, R]): List[Statement] = {
     val sourceSize = lowerValue(parallel.collectionSize)
     val collector = lowerValue(combiner.collector)
 
@@ -50,7 +50,7 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
   }
 
   private def createChunkProcessingCode[A: Type, Buf: Type, R: Type](
-      parallel: Parallel[Buf, R],
+      parallel: Parallel[R],
       chunkIdx: Expr[Int],
       partials: Expr[Array[Buf]],
       sourceSize: Expr[Int],

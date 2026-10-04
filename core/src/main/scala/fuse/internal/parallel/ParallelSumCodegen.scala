@@ -15,7 +15,7 @@ private[fuse] final class ParallelSumCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerat
   import opIr.Op.*
   import opGenerator.{lowerValue, newArray, processParallelChunks, lowerOp}
 
-  private[internal] def lowerParallelSum[T <: Summable: Type](parallel: Parallel[T, T], combiner: ParallelCombine.Sum[T]): List[Statement] = {
+  private[internal] def lowerParallelSum[T <: Summable: Type](parallel: Parallel[T], combiner: ParallelCombine.Sum[T]): List[Statement] = {
     val sourceSize = lowerValue(parallel.collectionSize)
     val resultExpr: Expr[T] = '{
       val size = $sourceSize
@@ -33,7 +33,7 @@ private[fuse] final class ParallelSumCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerat
   }
 
   private def createChunkProcessingCode[T <: Summable: Type](
-      par: Parallel[T, T],
+      par: Parallel[T],
       idx: Expr[Int],
       partials: Expr[Array[T]],
       sourceSize: Expr[Int],
