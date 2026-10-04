@@ -15,7 +15,7 @@ private[fuse] final class ParallelSumCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerat
   import opIr.Op.*
   import opGenerator.{lowerValue, newArray, processParallelChunks, lowerOp}
 
-  private[internal] def lowerParallelSum[T <: Summable: Type](parallel: Parallel[T, T]): List[Statement] = {
+  private[internal] def lowerParallelSum[T <: Summable: Type](parallel: Parallel[T, T], combiner: ParallelCombine.Sum[T]): List[Statement] = {
     val sourceSize = lowerValue(parallel.collectionSize)
     val resultExpr: Expr[T] = '{
       val size = $sourceSize
@@ -24,7 +24,7 @@ private[fuse] final class ParallelSumCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerat
       val partials = ${ newArray[T]('{ chunks }) }
       ${
         processParallelChunks('{ chunks }, '{ workers }) { chunkIdx =>
-          createChunkProcessingCode(parallel, chunkIdx, '{ partials }, '{ size }, '{ chunks })
+          createChunkProcessingCode(parallel, chunkIdx, '{ partials }, '{ size }, '{ chunks }, combiner)
         }
       }
       ${ reduceParallelSum[T]('{ partials }, '{ chunks }) }
@@ -32,13 +32,20 @@ private[fuse] final class ParallelSumCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerat
     List(ValDef(parallel.returnSymbol, Some(resultExpr.asTerm.changeOwner(parallel.returnSymbol))))
   }
 
-  private def createChunkProcessingCode[T: Type](par: Parallel[T, T], idx: Expr[Int], partials: Expr[Array[T]], sourceSize: Expr[Int], chunks: Expr[Int]): Expr[Unit] = {
+  private def createChunkProcessingCode[T <: Summable: Type](
+      par: Parallel[T, T],
+      idx: Expr[Int],
+      partials: Expr[Array[T]],
+      sourceSize: Expr[Int],
+      chunks: Expr[Int],
+      combiner: ParallelCombine.Sum[T]
+  ): Expr[Unit] = {
     val from = '{ ($idx.toLong * $sourceSize / $chunks).toInt }
     val until = '{ (($idx.toLong + 1L) * $sourceSize / $chunks).toInt }
     val fromDef = ValDef(par.from, Some(from.asTerm))
     val untilDef = ValDef(par.to, Some(until.asTerm))
     val statements = par.statements.flatMap(lowerOp)
-    val res = lowerValue(par.localResult)
+    val res = lowerValue(combiner.localResult)
     val resVal = '{ $partials($idx) = $res }.asTerm
     Block(fromDef :: untilDef :: statements, resVal).changeOwner(idx.asTerm.symbol.owner).asExprOf[Unit]
   }

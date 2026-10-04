@@ -55,7 +55,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
     val fromDef = ValDef(parallel.from, Some(from.asTerm))
     val untilDef = ValDef(parallel.to, Some(until.asTerm))
     val statements = parallel.statements.flatMap(lowerOp)
-    val localArray = lowerValue(parallel.localResult)
+    val localArray = lowerValue(concat.localResult)
 
     val emit =
       concat.validSize match {

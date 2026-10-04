@@ -32,7 +32,7 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
 
         ${
           processParallelChunks('{ chunks }, '{ workers }) { chunkIdx =>
-            createChunkProcessingCode[A, Buf, R](parallel, chunkIdx, '{ partials }, '{ size }, '{ chunks })
+            createChunkProcessingCode[A, Buf, R](parallel, chunkIdx, '{ partials }, '{ size }, '{ chunks }, combiner)
           }
         }
 
@@ -54,14 +54,15 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
       chunkIdx: Expr[Int],
       partials: Expr[Array[Buf]],
       sourceSize: Expr[Int],
-      chunks: Expr[Int]
+      chunks: Expr[Int],
+      combiner: ParallelCombine.GenericCombiner[A, Buf, R]
   ): Expr[Unit] = {
     val from = '{ ($chunkIdx * $sourceSize / $chunks) }
     val until = '{ ((($chunkIdx + 1) * $sourceSize) / $chunks) }
     val fromDef = ValDef(parallel.from, Some(from.asTerm))
     val untilDef = ValDef(parallel.to, Some(until.asTerm))
     val statements = parallel.statements.flatMap(lowerOp)
-    val res = lowerValue(parallel.localResult)
+    val res = lowerValue(combiner.localResult)
     val resVal = '{ $partials($chunkIdx) = $res }.asTerm
     Block(fromDef :: untilDef :: statements, resVal).changeOwner(chunkIdx.asTerm.symbol.owner).asExprOf[Unit]
   }

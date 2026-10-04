@@ -70,7 +70,6 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
           from = fromSymbol,
           to = untilSymbol,
           statements = List(body),
-          localResult = null, // Questo non esiste, niente accumulazione locale
           combiner = ParallelCombine.ArrayDirect[OUT]()
         )
 
@@ -109,8 +108,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
           from = fromSymbol,
           to = untilSymbol,
           statements = List(arrayDeclare, Declare(i, ConstantVal(0)), body),
-          localResult = SymbolRef[Array[OUT]](localVec),
-          combiner = ParallelCombine.ArrayConcat[OUT](Some(SymbolRef(i)))
+          combiner = ParallelCombine.ArrayConcat[OUT](Some(SymbolRef(i)), SymbolRef[Array[OUT]](localVec))
         )
 
         Program(statements = declarations ++ List(parallel), result = SymbolRef[Array[OUT]](resultSymbol))
@@ -135,8 +133,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
           from = fromSymbol,
           to = untilSymbol,
           statements = List(arrayDeclare, body),
-          localResult = DynamicArrayBuilderResult(localBuilderRef),
-          combiner = ParallelCombine.ArrayConcat[OUT](None)
+          combiner = ParallelCombine.ArrayConcat[OUT](None, DynamicArrayBuilderResult(localBuilderRef))
         )
         Program(statements = declarations ++ List(parallel), result = SymbolRef[Array[OUT]](resultSymbol))
       }
@@ -275,8 +272,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
           from = fromSymbol,
           to = untilSymbol,
           statements = List(Declare(localSumSymbol, zero), body),
-          localResult = SymbolRef[T](localSumSymbol),
-          combiner = ParallelCombine.Sum(zero)
+          combiner = ParallelCombine.Sum(zero, SymbolRef[T](localSumSymbol))
         )
         Program(statements = declarations ++ List(parallel), result = SymbolRef[T](resultSymbol))
       }
@@ -339,8 +335,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       from = fromSymbol,
       to = untilSymbol,
       statements = statements,
-      localResult = localBufferRef,
-      combiner = ParallelCombine.GenericCombiner[A, Buf, R](collectorRef)
+      combiner = ParallelCombine.GenericCombiner[A, Buf, R](collectorRef, localBufferRef)
     )
 
     Program(

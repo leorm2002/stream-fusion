@@ -64,7 +64,7 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
         parallel.combiner match {
           case sum: ParallelCombine.Sum[t] => {
             given Type[t] = sum.zero.valueType
-            new ParallelSumCodegen[OPIR, this.type](conf, this).lowerParallelSum(parallel.asInstanceOf[Parallel[t, t]])
+            new ParallelSumCodegen[OPIR, this.type](conf, this).lowerParallelSum(parallel.asInstanceOf[Parallel[t, t]], sum)
           }
           case concat: ParallelCombine.ArrayConcat[e] => {
             given Type[e] = concat.elemType

@@ -19,11 +19,14 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
   import quotes.reflect.*
 
   enum ParallelCombine[LOCAL, OUT] {
-    case Sum[T <: Summable](zero: Value[T]) extends ParallelCombine[T, T]
-    case ArrayConcat[T](validSize: Option[Value[Int]])(using val elemType: Type[T]) extends ParallelCombine[Array[T], Array[T]]
+    case Sum[T <: Summable](zero: Value[T], localResult: Value[T]) extends ParallelCombine[T, T]
+    case ArrayConcat[T](validSize: Option[Value[Int]], localResult: Value[Array[T]])(using val elemType: Type[T]) extends ParallelCombine[Array[T], Array[T]]
     case ArrayDirect[T]()(using val elemType: Type[T]) extends ParallelCombine[Array[T], Array[T]]
-    case GenericCombiner[A, Buf, R](collector: Value[ParallelCollector[A, Buf, R]])(using val elemType: Type[A], val bufType: Type[Buf], val resType: Type[R])
-        extends ParallelCombine[Buf, R]
+    case GenericCombiner[A, Buf, R](collector: Value[ParallelCollector[A, Buf, R]], localResult: Value[Buf])(using
+        val elemType: Type[A],
+        val bufType: Type[Buf],
+        val resType: Type[R]
+    ) extends ParallelCombine[Buf, R]
   }
 
   enum Op {
@@ -34,7 +37,6 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
         from: Symbol,
         to: Symbol,
         statements: List[Op],
-        localResult: Value[LOCAL],
         combiner: ParallelCombine[LOCAL, OUT]
     )
 
