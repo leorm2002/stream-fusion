@@ -31,7 +31,26 @@ private[internal] enum ExecutionMode {
 private[internal] class StreamIr(using val quotes: Quotes) {
   import quotes.reflect.*
 
-  final case class TypedSymbol[T](symbol: Symbol)(using val valueType: Type[T])
+  final case class TypedSymbol[T](symbol: Symbol)(using val valueType: Type[T]) {
+
+    def ref: Expr[T] =
+      Ref(symbol).asExprOf[T]
+  }
+  object TypedSymbol {
+    def fromExpr[T: Type](expr: Expr[T]): TypedSymbol[T] = {
+      val symbol = expr.asTerm.symbol
+
+      if (symbol == Symbol.noSymbol) {
+        report.errorAndAbort("Expected a symbol-backed expression")
+      }
+
+      if (!(symbol.termRef.widen =:= TypeRepr.of[T])) {
+        report.errorAndAbort(s"Internal symbol type mismatch: expected ${Type.show[T]}, found ${symbol.termRef.widen.show}")
+      }
+
+      new TypedSymbol[T](symbol)
+    }
+  }
 
   enum Cardinality {
     case Exact(size: Expr[Int])
@@ -108,7 +127,6 @@ private[internal] class StreamIr(using val quotes: Quotes) {
         from: Option[Expr[Int]],
         until: Option[Expr[Int]],
         outType: Type[A],
-        val counterRef: Expr[Int],
         val counterRefSymbol: TypedSymbol[Int]
     ) extends StreamTree[Phase.Enriched, A] with WithUpstream[Phase.Enriched, A]
 
@@ -149,15 +167,15 @@ private[internal] class StreamIr(using val quotes: Quotes) {
         innerMaterialized: List[Declaration],
         val predicates: List[Expr[Boolean]]
     ) extends StreamTree[Phase.Enriched, B] with WithUpstream[Phase.Enriched, A]
+
   }
 
   /** These are used in all the phases of the compiler, here to simplify invocation */
 
   /** Creates an immutable binding while preserving a type obtained through reflection. */
-  def createConstant[T: Type](name: String) = {
+  def createConstant[T: Type](name: String): TypedSymbol[T] = {
     TypedSymbol[T](Symbol.newVal(parent = Symbol.spliceOwner, name = Symbol.freshName(name), tpe = TypeRepr.of[T], flags = Flags.EmptyFlags, privateWithin = Symbol.noSymbol))
   }
-
   def createVariable[T: Type](name: String): TypedSymbol[T] = {
     // Mutable 'var'
     TypedSymbol[T](Symbol.newVal(parent = Symbol.spliceOwner, name = Symbol.freshName(name), tpe = TypeRepr.of[T], flags = Flags.Mutable, privateWithin = Symbol.noSymbol))
@@ -173,8 +191,9 @@ private[internal] class StreamIr(using val quotes: Quotes) {
 
   object Declaration {
 
-    final case class Impl[A](symbol: TypedSymbol[A], expr: Expr[A])(using val valueType: Type[A]) extends Declaration {
+    final case class Impl[A](symbol: TypedSymbol[A], expr: Expr[A]) extends Declaration {
       type T = A
+      override val valueType: Type[A] = symbol.valueType
     }
   }
 

@@ -143,7 +143,7 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
   def lowerValue[T: Type](value: Value[T]): Expr[T] = {
     value match {
       // Crea un Term da un quotes.reflect.Symbol e lo converte in Expr[T]
-      case SymbolRef(symbol) => Ref(symbol.symbol).asExprOf[T]
+      case SymbolRef(symbol) => symbol.ref
       case ScalaExpr(expr)   => expr
       case ConstantVal(expr) => expr
 
@@ -253,26 +253,29 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
         given Type[t] = result.elemType
         generateBuilderResult(result.builder).asExprOf[T]
 
-      case supplier: CollectorSupplier[a, buf, r] =>
+      case supplier: CollectorSupplier[a, buf, r, c] =>
         given Type[a] = supplier.elemType
         given Type[buf] = supplier.valueType
         given Type[r] = supplier.resultType
+        given Type[c] = supplier.collector.valueType
         val collector = lowerValue(supplier.collector)
         lowerSupplier[buf](collector).asExprOf[T]
 
-      case accumulate: CollectorAccumulate[a, buf, r] =>
+      case accumulate: CollectorAccumulate[a, buf, r, c] =>
         given Type[a] = accumulate.elemType
         given Type[buf] = accumulate.bufferType
         given Type[r] = accumulate.resultType
+        given Type[c] = accumulate.collector.valueType
         val collector = lowerValue(accumulate.collector)
         val buffer = lowerValue(accumulate.buffer)
         val elem = lowerValue(accumulate.elem)
         lowerAccumulate(collector, buffer, elem).asExprOf[T]
 
-      case finish: CollectorFinish[a, buf, r] =>
+      case finish: CollectorFinish[a, buf, r, c] =>
         given Type[a] = finish.elemType
         given Type[buf] = finish.bufferType
         given Type[r] = finish.valueType
+        given Type[c] = finish.collector.valueType
         val collector = lowerValue(finish.collector)
         val buffer = lowerValue(finish.buffer)
         lowerFinish[r](collector, buffer).asExprOf[T]

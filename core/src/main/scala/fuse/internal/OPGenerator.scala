@@ -288,7 +288,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     val emit: Emit[A] = emitted => {
       val accumulate = CollectorAccumulate(collectorRef, bufferRef, emitted.elem)
       optimizedStream.collectionStrategy.earlyExitVar match {
-        case Some(exitRef) => Op.If(accumulate, AssignVal(TypedSymbol[Boolean](exitRef.asTerm.symbol), ConstantVal(false)))
+        case Some(exitRef) => Op.If(accumulate, AssignVal(TypedSymbol.fromExpr(exitRef), ConstantVal(false)))
         case None          => Compute(accumulate)
       }
     }
@@ -319,13 +319,13 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     val collectorRef = SymbolRef[ParallelCollector[A, Buf, R]](collectorSymbol)
     val localBufferRef = SymbolRef[Buf](localBufferSymbol)
     // Non posso avere early exit per proprietà dell'input
-    val emit: Emit[A] = emitted => Compute(CollectorAccumulate(collectorRef.asInstanceOf[Value[CollectorBase[A, Buf, R]]], localBufferRef, emitted.elem))
+    val emit: Emit[A] = emitted => Compute(CollectorAccumulate(collectorRef, localBufferRef, emitted.elem))
     val range = Some(SourceRange(SymbolRef[Int](fromSymbol), SymbolRef[Int](untilSymbol)))
     val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
     val declarations = getAllDeclarations(optimizedStream)
     val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
     val statements = List(
-      Declare(localBufferSymbol, CollectorSupplier(collectorRef.asInstanceOf[Value[CollectorBase[A, Buf, R]]])),
+      Declare(localBufferSymbol, CollectorSupplier(collectorRef)),
       body
     )
 
@@ -380,8 +380,8 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   }
 
   private def buildSlice[OUT](slice: EnrichedSlice[OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
-    val counterRef = slice.counterRef
     val counterRefSymbol = slice.counterRefSymbol
+    val counterRef = counterRefSymbol.ref
     val upstreamEmit: Emit[OUT] = emitted => {
       val output = slice.from match {
         case Some(from) => Op.If(GreaterThanOrEqual(ScalaExpr(counterRef), ScalaExpr(from)), emit(emitted))
@@ -563,7 +563,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       case JIterableSource(term, outType)                                                                                    => None
       case Filter(upstream, predicate, outType)                                                                              => getParallelSourceSize(upstream)
       case Map(upstream, function, inType, outType)                                                                          => getParallelSourceSize(upstream)
-      case EnrichedSlice(upstream, from, until, outType, counterRef, _)                                                      => None
+      case EnrichedSlice(upstream, from, until, outType, counterRef)                                                         => None
       case EnrichedFlatMap(upstream, innerStream, inType, outType, binder, innerDeclarations, innerMaterialized, predicates) => getParallelSourceSize(upstream)
     }
   }

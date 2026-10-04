@@ -94,7 +94,7 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
 
   final case class ScalaExpr[T](expr: Expr[T])(using val valueType: Type[T]) extends Value[T]
 
-  final case class SymbolRef[T](symbol: TypedSymbol[T])(using val valueType: Type[T]) extends Value[T]
+  final case class SymbolRef[T](symbol: TypedSymbol[T]) extends Value[T] { override val valueType: Type[T] = symbol.valueType }
 
   final case class ConstantVal[T] private (expr: Expr[T])(using val valueType: Type[T]) extends Value[T]
 
@@ -157,12 +157,10 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
     override val valueType: Type[Array[A]] = Type.of[Array[A]]
   }
 
-  final case class CollectorSupplier[A, Buf, R](
-      collector: Value[CollectorBase[A, Buf, R]]
-  )(using val elemType: Type[A], val valueType: Type[Buf], val resultType: Type[R])
+  final case class CollectorSupplier[A, Buf, R, C <: CollectorBase[A, Buf, R]](collector: Value[C])(using val elemType: Type[A], val valueType: Type[Buf], val resultType: Type[R])
       extends Value[Buf]
 
-  final case class CollectorAccumulate[A, Buf, R](collector: Value[CollectorBase[A, Buf, R]], buffer: Value[Buf], elem: Value[A])(using
+  final case class CollectorAccumulate[A, Buf, R, C <: CollectorBase[A, Buf, R]](collector: Value[C], buffer: Value[Buf], elem: Value[A])(using
       val elemType: Type[A],
       val bufferType: Type[Buf],
       val resultType: Type[R]
@@ -170,7 +168,7 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
     override val valueType: Type[Boolean] =
       Type.of[Boolean]
   }
-  final case class CollectorFinish[A, Buf, R](collector: Value[CollectorBase[A, Buf, R]], buffer: Value[Buf])(using
+  final case class CollectorFinish[A, Buf, R, C <: CollectorBase[A, Buf, R]](collector: Value[C], buffer: Value[Buf])(using
       val elemType: Type[A],
       val bufferType: Type[Buf],
       val valueType: Type[R]
