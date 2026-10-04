@@ -22,30 +22,31 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   import opIr.Op.*
   import logger.*
 
-  def generate[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, Buf, OUT])(using elemType: Type[ELEM], bufType: Type[Buf], outType: Type[OUT]): Program[OUT] = {
+  def generate[ELEM, OUT](optimizedStream: AstExt[ELEM, OUT])(using elemType: Type[ELEM], outType: Type[OUT]): Program[OUT] = {
     val decls = optimizedStream.declarations
     debug(s"Numero di dichiarazioni: ${decls.size}")
     debug(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
     val executionMode = optimizedStream.executionMode
     optimizedStream.collectionStrategy.collectionStrategy match {
-      case ToArray()                  => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Nothing, Array[ELEM]]]).asInstanceOf[Program[OUT]]
-      case _: Summing[t]              => generateSummingAccumulator[t](optimizedStream.asInstanceOf[AstExt[t, Nothing, t]])(using elemType.asInstanceOf[Type[t]])
-      case WithCollector(collExpr, _) =>
+      case ToArray()                         => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Array[ELEM]]]).asInstanceOf[Program[OUT]]
+      case _: Summing[t]                     => generateSummingAccumulator[t](optimizedStream.asInstanceOf[AstExt[t, t]])(using elemType.asInstanceOf[Type[t]])
+      case coll: WithCollector[ELEM, b, OUT] =>
+        given Type[b] = coll.bufType
         executionMode match {
-          case ExecutionMode.Sequential => generateGenericAccumulator(optimizedStream, collExpr)
-          case ExecutionMode.Parallel   => generateParallelGenericAccumulator(optimizedStream, collExpr)
+          case ExecutionMode.Sequential => generateGenericAccumulator(optimizedStream, coll.collector)
+          case ExecutionMode.Parallel   => generateParallelGenericAccumulator(optimizedStream, coll.collector)
         }
     }
   }
 
-  def generateToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, Array[OUT]]): Program[Array[OUT]] = {
+  def generateToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, Array[OUT]]): Program[Array[OUT]] = {
     optimizedStream.executionMode match {
       case ExecutionMode.Sequential => generateSequentialToArrayAccumulator(optimizedStream)
       case ExecutionMode.Parallel   => generateParallelToArrayAccumulator(optimizedStream)
     }
   }
 
-  def generateParallelToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, Array[OUT]]): Program[Array[OUT]] = {
+  def generateParallelToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, Array[OUT]]): Program[Array[OUT]] = {
     optimizedStream.cardinality match {
       // Direct write nell'array finale
       case Cardinality.Exact(sizeExpr) if optimizedStream.hasAlignedIndexes => {
@@ -144,7 +145,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       case Cardinality.Exact(_) => report.errorAndAbort("Internal error: parallel stream with exact cardinality must have aligned indexes")
     }
   }
-  def generateSequentialToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, ?, Array[OUT]]): Program[Array[OUT]] = {
+  def generateSequentialToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, Array[OUT]]): Program[Array[OUT]] = {
     val generated: Program[Array[OUT]] = optimizedStream.cardinality match {
       // Pipeline 1:1 dimensione esatta, se non abbiamo outputCardinalityUpperBound c'è un errore nel codices
       case Cardinality.Exact(sizeExpr) if optimizedStream.hasAlignedIndexes => {
@@ -231,16 +232,16 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     generated.copy(statements = declarations ++ generated.statements)
 
   }
-  def generateSummingAccumulator[OUT <: Summable: Type](optimizedStream: AstExt[OUT, ?, OUT]): Program[OUT] = {
+  def generateSummingAccumulator[OUT <: Summable: Type](optimizedStream: AstExt[OUT, OUT]): Program[OUT] = {
     Type.of[OUT] match {
-      case '[Int]    => buildSum[Int](optimizedStream.asInstanceOf[AstExt[Int, ?, Int]], ConstantVal(0)).asInstanceOf[Program[OUT]]
-      case '[Double] => buildSum[Double](optimizedStream.asInstanceOf[AstExt[Double, ?, Double]], ConstantVal(0d)).asInstanceOf[Program[OUT]]
-      case '[Float]  => buildSum[Float](optimizedStream.asInstanceOf[AstExt[Float, ?, Float]], ConstantVal(0f)).asInstanceOf[Program[OUT]]
-      case '[Long]   => buildSum[Long](optimizedStream.asInstanceOf[AstExt[Long, ?, Long]], ConstantVal(0L)).asInstanceOf[Program[OUT]]
+      case '[Int]    => buildSum[Int](optimizedStream.asInstanceOf[AstExt[Int, Int]], ConstantVal(0)).asInstanceOf[Program[OUT]]
+      case '[Double] => buildSum[Double](optimizedStream.asInstanceOf[AstExt[Double, Double]], ConstantVal(0d)).asInstanceOf[Program[OUT]]
+      case '[Float]  => buildSum[Float](optimizedStream.asInstanceOf[AstExt[Float, Float]], ConstantVal(0f)).asInstanceOf[Program[OUT]]
+      case '[Long]   => buildSum[Long](optimizedStream.asInstanceOf[AstExt[Long, Long]], ConstantVal(0L)).asInstanceOf[Program[OUT]]
     }
   }
 
-  private def buildSum[T <: Summable: Type](optimizedStream: AstExt[T, ?, T], zero: Value[T]): Program[T] = {
+  private def buildSum[T <: Summable: Type](optimizedStream: AstExt[T, T], zero: Value[T]): Program[T] = {
     optimizedStream.executionMode match {
       case ExecutionMode.Sequential => {
         val sumSymbol = createVariable[T]("sum")
@@ -282,7 +283,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     }
   }
 
-  def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, Buf, R], collector: Expr[CollectorBase[A, Buf, R]]): Program[R] = {
+  def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, R], collector: Expr[CollectorBase[A, Buf, R]]): Program[R] = {
     val collectorSymbol = createConstant("collector", collector.asTerm.tpe.widen)
     val bufferSymbol = createConstant[Buf]("buffer")
     val collectorRef = SymbolRef[CollectorBase[A, Buf, R]](collectorSymbol)
@@ -310,7 +311,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   }
 
   def generateParallelGenericAccumulator[A: Type, Buf: Type, R: Type](
-      optimizedStream: AstExt[A, Buf, R],
+      optimizedStream: AstExt[A, R],
       collector: Expr[CollectorBase[A, Buf, R]]
   ): Program[R] = {
     given Type[ParallelCollector[A, Buf, R]] = Type.of[ParallelCollector[A, Buf, R]]
@@ -534,7 +535,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     buildBody[IN](map.upstream, upstreamEmit, earlyExitRef, range)
   }
 
-  def getAllDeclarations[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, Buf, OUT]): List[Op] = {
+  def getAllDeclarations[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, OUT]): List[Op] = {
     val prefixStatements = optimizedStream.prefixStatements.map(ExternalStatement.apply)
     val declarations = optimizedStream.declarations.map(materializedToOp)
     prefixStatements ++ declarations

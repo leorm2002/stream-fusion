@@ -12,7 +12,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
   import ir.StreamTree.*
   import logger.*
 
-  def optimize[OUT, Buf, R](ast: ir.Ast[OUT, Buf, R]): AstExt[OUT, Buf, R] = {
+  def optimize[OUT, Buf, R](ast: ir.Ast[OUT, R]): AstExt[OUT, R] = {
 
     // Stream enrichment
     val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
@@ -37,7 +37,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
     )
   }
 
-  private def enrich[OUT, Buf, R](strategy: CollectionStrategy[OUT, Buf, R]): (Option[Expr[Boolean]], List[Declaration]) = {
+  private def enrich[OUT, R](strategy: CollectionStrategy[OUT, R]): (Option[Expr[Boolean]], List[Declaration]) = {
 
     strategy match {
       // If is a toArray/Summing strategy no enrichment is needed it will be handled completely in the code generation phase with native types specializtion

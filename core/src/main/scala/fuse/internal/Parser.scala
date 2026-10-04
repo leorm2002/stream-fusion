@@ -24,7 +24,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
       stream: Expr[Stream[A]],
       collector: Expr[Collector[A, Buf, R, S]],
       executionMode: ExecutionMode
-  ): Ast[A, Buf, R] = {
+  ): Ast[A, R] = {
     debug("Starting  to parse the stream body")
     debug("=== parseTerm ===")
     debug(stream.asTerm.show)
@@ -213,7 +213,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
 
   private def extractCollectionStrategy[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](collector: Expr[Collector[A, Buf, R, S]], executionMode: ExecutionMode)(using
       Quotes
-  ): CollectionStrategy[A, Buf, R] = {
+  ): CollectionStrategy[A, R] = {
 
     // Check if we are treating the "fake" toArray collector
     val rawTpe = collector.asTerm.tpe
@@ -243,10 +243,10 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
 
     if (isTheOpaqueToArray) {
       debug(" --> is a specialized to array")
-      ToArray[A]().asInstanceOf[CollectionStrategy[A, Buf, R]]
+      ToArray[A]().asInstanceOf[CollectionStrategy[A, R]]
     } else if (isTheOpaqueSumming) {
       debug(" --> is a specialized sum")
-      Summing[A & Summable]().asInstanceOf[CollectionStrategy[A, Buf, R]]
+      Summing[A & Summable]().asInstanceOf[CollectionStrategy[A, R]]
     } else {
       debug(" --> is a generic collector")
       if (logger.compileCfg.strictInlining) {

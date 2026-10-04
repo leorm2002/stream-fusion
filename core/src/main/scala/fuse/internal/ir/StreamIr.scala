@@ -47,20 +47,20 @@ private[internal] class StreamIr(using val quotes: Quotes) {
   }
 
   /** The base AST, abtained by the parsing phase */
-  case class Ast[A, Buf, R](
+  case class Ast[A, R](
       parsedStream: StreamTree[Phase.Raw, A],
-      collectionStrategy: CollectionStrategy[A, Buf, R],
+      collectionStrategy: CollectionStrategy[A, R],
       prefixStatements: List[Statement],
       executionMode: ExecutionMode
   )
 
   /** Represents parsed optimized and enriched stream
     */
-  case class AstExt[A, Buf, R](
+  case class AstExt[A, R](
       enrichedStream: StreamTree[Phase.Enriched, A],
       prefixStatements: List[Statement],
       declarations: List[Declaration],
-      collectionStrategy: EnrichedCollectionStrategy[A, Buf, R],
+      collectionStrategy: EnrichedCollectionStrategy[A, R],
       hasAlignedIndexes: Boolean,
       cardinality: Cardinality,
       executionMode: ExecutionMode
