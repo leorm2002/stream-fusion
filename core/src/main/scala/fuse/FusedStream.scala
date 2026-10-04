@@ -63,7 +63,9 @@ object FusedStream {
   export fuse.RuntimeConfig
   export fuse.ParallelCollector
   export fuse.TerminationPolicy
-  
+  export fuse.Collector
+  export fuse.Exhaustive
+  export fuse.ShortCircuiting
 
   @compileTimeOnly("FusedStream.toArray can only be used as a FusedStream terminal collector")
   def toArray[T]: ToArrayCollector[T] = null.asInstanceOf[ToArrayCollector[T]]
