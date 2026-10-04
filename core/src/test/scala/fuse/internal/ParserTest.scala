@@ -30,7 +30,7 @@ class ParserTest extends FunSuite {
           .map((z: String) => s"Risultato: $z") // Step 4: Altra Map
       }
 
-      val mockCollector: Expr[Collector[String, ListBuffer[String], List[String], Exhaustive]] = '{ Collector.toList[String] }
+      val mockCollector = '{ new Collector.ToListCollector[String] }
       // 2. Chiamata al Parser
       val astResult = parser.parseExpression[String, ListBuffer[String], List[String], Exhaustive](mockStreamExpr, mockCollector, ExecutionMode.Sequential)
       def getPrevious(arg0: parser.ir.StreamTree[?, ?]) = {

@@ -36,7 +36,7 @@ object FusedStream {
 
   extension [A](inline self: SequentialStream[A]) {
 
-    /** This is the terminal operator which will trigger the collection of the elements, a custom collector may be defined by the user
+    /** This is the terminal operator which will trigger the collection of the elements. Custom collectors must be named concrete classes. Anonymous collectors will not be accepted
       */
     inline def collect[Buf, R, S <: TerminationPolicy](inline collector: Collector[A, Buf, R, S])(using inline compileCfg: CompileConfig, runCfg: RuntimeConfig): R = ${
       Macro.collectSeq[A, Buf, R, S]('self, 'collector, 'compileCfg, 'runCfg)
@@ -46,7 +46,7 @@ object FusedStream {
 // The parallel stream needs a special type of collector which can be
   extension [A](inline self: ParallelStream[A]) {
 
-    /** This is the terminal operator which will trigger the collection of the elements, a custom collector may be defined by the user
+    /** This is the terminal operator which will trigger the collection of the elements. Custom collectors must be named concrete classes. Anonymous collectors will not be accepted
       */
     inline def collect[Buf, R](inline collector: ParallelCollector[A, Buf, R])(using inline compileCfg: CompileConfig, runCfg: RuntimeConfig): R = ${
       Macro.collectPar[A, Buf, R]('self, 'collector, 'compileCfg, 'runCfg)

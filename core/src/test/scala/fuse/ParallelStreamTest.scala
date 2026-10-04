@@ -21,6 +21,13 @@ import scala.collection.mutable.ListBuffer
   */
 class ParallelStreamTest extends FunSuite {
 
+  final class InlineListCollector extends ParallelCollector[Int, ListBuffer[Int], List[Int]] {
+    inline def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
+    inline def accumulator(buf: ListBuffer[Int], elem: Int): Boolean = { buf.addOne(elem); false }
+    inline def combine(left: ListBuffer[Int], right: ListBuffer[Int]): ListBuffer[Int] = { left.addAll(right); left }
+    inline def finisher(buf: ListBuffer[Int]): List[Int] = buf.toList
+  }
+
   test("Parallel map test") {
     val nums = Array(1, 2, 3, 4, 5)
 
@@ -125,13 +132,13 @@ class ParallelStreamTest extends FunSuite {
         Int,
         ListBuffer[Int],
         List[Int],
-        NoEarlyStopping
+        Exhaustive
       ] {
 
-        override def supplier(): ListBuffer[Int] =
+        override inline def supplier(): ListBuffer[Int] =
           ListBuffer.empty[Int]
 
-        override def accumulator(
+        override inline def accumulator(
             buf: ListBuffer[Int],
             elem: Int
         ): Boolean = {
@@ -139,7 +146,7 @@ class ParallelStreamTest extends FunSuite {
           false
         }
 
-        override def finisher(
+        override inline def finisher(
             buf: ListBuffer[Int]
         ): List[Int] =
           buf.toList
@@ -211,18 +218,7 @@ class ParallelStreamTest extends FunSuite {
     given RuntimeConfig = RuntimeConfig.default.copy(workerCount = 3, chunksPerWorker = 2)
     val nums = (1 to 50).toArray
 
-    val customToList = new ParallelCollector[Int, ListBuffer[Int], List[Int]] {
-      override def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
-      override def accumulator(buf: ListBuffer[Int], elem: Int): Boolean = {
-        buf.addOne(elem)
-        false
-      }
-      override def combine(left: ListBuffer[Int], right: ListBuffer[Int]): ListBuffer[Int] = {
-        left.addAll(right)
-        left
-      }
-      override def finisher(buf: ListBuffer[Int]): List[Int] = buf.toList
-    }
+    val customToList = new InlineListCollector
 
     val result = FusedStream
       .from(nums)
@@ -237,18 +233,7 @@ class ParallelStreamTest extends FunSuite {
 
   test("Parallel stream collects empty array with custom combinable collector") {
     val nums = Array.empty[Int]
-    val customToList = new ParallelCollector[Int, ListBuffer[Int], List[Int]] {
-      override def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
-      override def accumulator(buf: ListBuffer[Int], elem: Int): Boolean = {
-        buf.addOne(elem)
-        false
-      }
-      override def combine(left: ListBuffer[Int], right: ListBuffer[Int]): ListBuffer[Int] = {
-        left.addAll(right)
-        left
-      }
-      override def finisher(buf: ListBuffer[Int]): List[Int] = buf.toList
-    }
+    val customToList = new InlineListCollector
 
     val result = FusedStream
       .from(nums)

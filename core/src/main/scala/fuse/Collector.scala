@@ -18,7 +18,7 @@ sealed trait ShortCircuiting extends TerminationPolicy
 /** A collector thas is combinable has a method that permits to combine to istances of the collector, used in parallel algorithms
   */
 trait Combinable[B] {
-  def combine(left: B, right: B): B
+  inline def combine(left: B, right: B): B
 }
 
 sealed trait CollectorBase[E, B, R] {

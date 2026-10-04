@@ -126,23 +126,25 @@ class SourceAndCollectorTest extends FunSuite {
     val events = ListBuffer.empty[String]
     val values = Array(1, 2, 3)
 
-    def collector(): Collector[Int, ListBuffer[Int], String, Exhaustive] = {
-      events += "collector"
-      new Collector[Int, ListBuffer[Int], String, Exhaustive] {
-        override def supplier(): ListBuffer[Int] = {
-          events += "supplier"
-          ListBuffer.empty[Int]
-        }
-        override def accumulator(buffer: ListBuffer[Int], elem: Int): Boolean = {
-          events += s"add:$elem"
-          buffer += elem
-          true
-        }
-        override def finisher(buffer: ListBuffer[Int]): String = {
-          events += "finisher"
-          buffer.mkString(",")
-        }
+    class EventCollector extends Collector[Int, ListBuffer[Int], String, Exhaustive] {
+      inline def supplier(): ListBuffer[Int] = {
+        events += "supplier"
+        ListBuffer.empty[Int]
       }
+      inline def accumulator(buffer: ListBuffer[Int], elem: Int): Boolean = {
+        events += s"add:$elem"
+        buffer += elem
+        true
+      }
+      inline def finisher(buffer: ListBuffer[Int]): String = {
+        events += "finisher"
+        buffer.mkString(",")
+      }
+    }
+
+    def collector(): EventCollector = {
+      events += "collector"
+      new EventCollector
     }
 
     assertEquals(FusedStream.from(values).collect(collector()), "1,2,3")
@@ -168,16 +170,17 @@ class SourceAndCollectorTest extends FunSuite {
   }
 
   test("Generated declarations retain definitions in inline sources and collectors") {
+    class SumCollector extends Collector[Int, ListBuffer[Int], Int, Exhaustive] {
+      inline def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
+      inline def accumulator(buffer: ListBuffer[Int], elem: Int): Boolean = {
+        buffer += elem
+        false
+      }
+      inline def finisher(buffer: ListBuffer[Int]): Int = buffer.sum
+    }
     val result = FusedStream
       .from(Array.tabulate(3)(n => n + 1))
-      .collect(new Collector[Int, ListBuffer[Int], Int, Exhaustive] {
-        override def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
-        override def accumulator(buffer: ListBuffer[Int], elem: Int): Boolean = {
-          buffer += elem
-          false
-        }
-        override def finisher(buffer: ListBuffer[Int]): Int = buffer.sum
-      })
+      .collect(new SumCollector)
 
     assertEquals(result, 6)
   }
@@ -290,14 +293,15 @@ class SourceAndCollectorTest extends FunSuite {
   test("An early stopping collector stops both the inner and outer iterators") {
     val outer = new CountingIterable(List(1, 2, 3))
     val inner = new CountingIterable(List(10, 20, 30))
-    val collector = new Collector[Int, ListBuffer[Int], List[Int], ShortCircuiting] {
-      override def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
-      override def accumulator(buffer: ListBuffer[Int], elem: Int): Boolean = {
+    class TakeTwoCollector extends Collector[Int, ListBuffer[Int], List[Int], ShortCircuiting] {
+      inline def supplier(): ListBuffer[Int] = ListBuffer.empty[Int]
+      inline def accumulator(buffer: ListBuffer[Int], elem: Int): Boolean = {
         buffer += elem
         buffer.size == 2
       }
-      override def finisher(buffer: ListBuffer[Int]): List[Int] = buffer.toList
+      inline def finisher(buffer: ListBuffer[Int]): List[Int] = buffer.toList
     }
+    val collector = new TakeTwoCollector
 
     val result = FusedStream.from(outer).flatMap(n => FusedStream.from(inner).map(_ + n)).collect(collector)
 

@@ -249,6 +249,14 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
       Summing[A & Summable]().asInstanceOf[CollectionStrategy[A, Buf, R]]
     } else {
       debug(" --> is a generic collector")
+      // To guarantee the inlining of collector methods we must force the user to implement a collector
+      val collectorClass = dealiasedTpe.typeSymbol
+      if (!collectorClass.isClassDef || collectorClass.isAnonymousClass || collectorClass.flags.is(Flags.Trait) || collectorClass.flags.is(Flags.Abstract)) {
+        report.errorAndAbort(
+          "StreamFusion: collect requires a named concrete collector class. Anonymous collectors and references typed as Collector are not supported. ",
+          collector.asTerm.pos
+        )
+      }
       val collectorBaseType = dealiasedTpe.baseType(TypeRepr.of[Collector].typeSymbol)
 
       val stopPolicy = collectorBaseType match {
