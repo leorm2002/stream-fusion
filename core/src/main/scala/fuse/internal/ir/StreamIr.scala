@@ -5,7 +5,6 @@ import scala.quoted.Expr
 import scala.quoted.Type
 import scala.collection.mutable.ArrayBuilder
 import fuse.internal.{CollectionStrategy, EnrichedCollectionStrategy}
-
 // Alias the StreamIr to a type combined with singleton. this will guarantee no problem with path deendant type
 type AnyIR = StreamIr & Singleton
 
@@ -31,6 +30,8 @@ private[internal] enum ExecutionMode {
   */
 private[internal] class StreamIr(using val quotes: Quotes) {
   import quotes.reflect.*
+
+  final case class TypedSymbol[T](symbol: Symbol)(using val valueType: Type[T])
 
   enum Cardinality {
     case Exact(size: Expr[Int])
@@ -102,9 +103,14 @@ private[internal] class StreamIr(using val quotes: Quotes) {
         extends StreamTree[Phase.Raw, A]
         with WithUpstream[Phase.Raw, A]
 
-    case EnrichedSlice[A](upstream: StreamTree[Phase.Enriched, A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A], val counterRef: Expr[Int])
-        extends StreamTree[Phase.Enriched, A]
-        with WithUpstream[Phase.Enriched, A]
+    case EnrichedSlice[A](
+        upstream: StreamTree[Phase.Enriched, A],
+        from: Option[Expr[Int]],
+        until: Option[Expr[Int]],
+        outType: Type[A],
+        val counterRef: Expr[Int],
+        val counterRefSymbol: TypedSymbol[Int]
+    ) extends StreamTree[Phase.Enriched, A] with WithUpstream[Phase.Enriched, A]
 
     /** A flat map operation
       *
@@ -127,7 +133,7 @@ private[internal] class StreamIr(using val quotes: Quotes) {
         innerStream: StreamTree[Phase.Raw, B],
         inType: Type[A],
         outType: Type[B],
-        binder: Symbol,
+        binder: TypedSymbol[A],
         innerDeclarations: List[Statement]
     ) extends StreamTree[Phase.Raw, B] with WithUpstream[Phase.Raw, A]
 
@@ -138,7 +144,7 @@ private[internal] class StreamIr(using val quotes: Quotes) {
         innerStream: StreamTree[Phase.Enriched, B], // AST dell'inner stream già arricchito
         inType: Type[A],
         outType: Type[B],
-        binder: Symbol,
+        binder: TypedSymbol[A],
         innerDeclarations: List[Statement],
         innerMaterialized: List[Declaration],
         val predicates: List[Expr[Boolean]]
@@ -147,42 +153,29 @@ private[internal] class StreamIr(using val quotes: Quotes) {
 
   /** These are used in all the phases of the compiler, here to simplify invocation */
 
-  def createConstant[T: Type](name: String): Symbol =
-    createConstant(name, TypeRepr.of[T])
-
   /** Creates an immutable binding while preserving a type obtained through reflection. */
-  def createConstant(name: String, tpe: TypeRepr): Symbol = {
-    Symbol.newVal(
-      parent = Symbol.spliceOwner,
-      name = Symbol.freshName(name),
-      tpe = tpe,
-      flags = Flags.EmptyFlags,
-      privateWithin = Symbol.noSymbol
-    )
+  def createConstant[T: Type](name: String) = {
+    TypedSymbol[T](Symbol.newVal(parent = Symbol.spliceOwner, name = Symbol.freshName(name), tpe = TypeRepr.of[T], flags = Flags.EmptyFlags, privateWithin = Symbol.noSymbol))
   }
 
-  def createVariable[T: Type](name: String) = {
-    Symbol.newVal(
-      parent = Symbol.spliceOwner,
-      name = Symbol.freshName(name),
-      tpe = TypeRepr.of[T],
-      flags = Flags.Mutable, // Mutable 'var'
-      privateWithin = Symbol.noSymbol
-    )
+  def createVariable[T: Type](name: String): TypedSymbol[T] = {
+    // Mutable 'var'
+    TypedSymbol[T](Symbol.newVal(parent = Symbol.spliceOwner, name = Symbol.freshName(name), tpe = TypeRepr.of[T], flags = Flags.Mutable, privateWithin = Symbol.noSymbol))
   }
 
   sealed trait Declaration {
     type T
 
-    def symbol: Symbol
+    def symbol: TypedSymbol[T]
     def expr: Expr[T]
     def valueType: Type[T]
   }
 
   object Declaration {
 
-    final case class Impl[A](symbol: Symbol, expr: Expr[A])(using val valueType: Type[A]) extends Declaration {
+    final case class Impl[A](symbol: TypedSymbol[A], expr: Expr[A])(using val valueType: Type[A]) extends Declaration {
       type T = A
     }
   }
+
 }

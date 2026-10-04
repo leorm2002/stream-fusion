@@ -46,7 +46,7 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
       }
     }
 
-    List(ValDef(parallel.returnSymbol, Some(resultExpr.asTerm.changeOwner(parallel.returnSymbol))))
+    List(ValDef(parallel.returnSymbol.symbol, Some(resultExpr.asTerm.changeOwner(parallel.returnSymbol.symbol))))
   }
 
   private def createChunkProcessingCode[A: Type, Buf: Type, R: Type](
@@ -59,8 +59,8 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
   ): Expr[Unit] = {
     val from = '{ ($chunkIdx * $sourceSize / $chunks) }
     val until = '{ ((($chunkIdx + 1) * $sourceSize) / $chunks) }
-    val fromDef = ValDef(parallel.from, Some(from.asTerm))
-    val untilDef = ValDef(parallel.to, Some(until.asTerm))
+    val fromDef = ValDef(parallel.from.symbol, Some(from.asTerm))
+    val untilDef = ValDef(parallel.to.symbol, Some(until.asTerm))
     val statements = parallel.statements.flatMap(lowerOp)
     val res = lowerValue(combiner.localResult)
     val resVal = '{ $partials($chunkIdx) = $res }.asTerm

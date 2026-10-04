@@ -48,9 +48,10 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
         debug(s"With collector: ${collector.getClass()} early stop: ${isEarlyStopping}")
         if (isEarlyStopping) {
           // Create a dedicated variable for exit
-          val counterSymbol = createVariable[Boolean]("keepProducing")
+          val typedCounterSymbol = createVariable[Boolean]("keepProducing")
+          val counterSymbol = typedCounterSymbol.symbol
           val counterRef = Ref(counterSymbol).asExprOf[Boolean]
-          return (Option(counterRef), List(Declaration.Impl(counterSymbol, Expr(true))))
+          return (Option(counterRef), List(Declaration.Impl(typedCounterSymbol, Expr(true))))
         } else {
           return (None, Nil)
         }
@@ -91,8 +92,9 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
         }
 
         // Single position counter for the whole slice
-        val counterSymbol = createVariable[Int]("sliceCounter")
-        val counterDef = Declaration.Impl(counterSymbol, Expr(0))
+        val typedCounterSymbol = createVariable[Int]("sliceCounter")
+        val counterSymbol = typedCounterSymbol.symbol
+        val counterDef = Declaration.Impl(typedCounterSymbol, Expr(0))
         val counterRef = Ref(counterSymbol).asExprOf[Int]
 
         // `until` can stop traversal completely, so bubble it down to the source.
@@ -103,7 +105,8 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
         val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(slice.upstream, currentExitPredicates)
 
-        val enrichedSlice = EnrichedSlice[OUT](upstream = enrichedUpstream, from = fromRef, until = untilRef, outType = slice.outType, counterRef = counterRef)
+        val enrichedSlice =
+          EnrichedSlice[OUT](upstream = enrichedUpstream, from = fromRef, until = untilRef, outType = slice.outType, counterRef = counterRef, counterRefSymbol = typedCounterSymbol)
 
         (enrichedSlice, upstreamDeclarations ::: fromDeclarations ::: untilDeclarations ::: List(counterDef), outPred)
       }
@@ -157,22 +160,26 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
       case source: ArraySource[OUT] =>
         given Type[OUT] = source.outType
-        val sourceSymbol = createConstant[Array[OUT]]("source")
+        val typedSourceSymbol = createConstant[Array[OUT]]("source")
+        val sourceSymbol = typedSourceSymbol.symbol
         val sourceRef = Ref(sourceSymbol).asExprOf[Array[OUT]]
-        val sourceDef = Declaration.Impl(sourceSymbol, source.term)
-        val sizeSymbol = createConstant[Int]("sourceSize")
+        val sourceDef = Declaration.Impl(typedSourceSymbol, source.term)
+        val typedSizeSymbol = createConstant[Int]("sourceSize")
+        val sizeSymbol = typedSizeSymbol.symbol
         val sizeRef = Ref(sizeSymbol).asExprOf[Int]
-        val sizeDef = Declaration.Impl(sizeSymbol, '{ $sourceRef.length })
+        val sizeDef = Declaration.Impl(typedSizeSymbol, '{ $sourceRef.length })
         (EnrichedArraySource[OUT](sourceRef, sizeRef, source.outType), List[Declaration](sourceDef, sizeDef), exitPredicates)
 
       case source: JListSource[OUT] =>
         given Type[OUT] = source.outType
-        val sourceSymbol = createConstant[java.util.List[OUT]]("source")
+        val typedSourceSymbol = createConstant[java.util.List[OUT]]("source")
+        val sourceSymbol = typedSourceSymbol.symbol
         val sourceRef = Ref(sourceSymbol).asExprOf[java.util.List[OUT]]
-        val sourceDef = Declaration.Impl(sourceSymbol, source.term)
-        val sizeSymbol = createConstant[Int]("sourceSize")
+        val sourceDef = Declaration.Impl(typedSourceSymbol, source.term)
+        val typedSizeSymbol = createConstant[Int]("sourceSize")
+        val sizeSymbol = typedSizeSymbol.symbol
         val sizeRef = Ref(sizeSymbol).asExprOf[Int]
-        val sizeDef = Declaration.Impl(sizeSymbol, '{ $sourceRef.size() })
+        val sizeDef = Declaration.Impl(typedSizeSymbol, '{ $sourceRef.size() })
         (EnrichedJListSource[OUT](sourceRef, sizeRef, source.outType), List[Declaration](sourceDef, sizeDef), exitPredicates)
 
     }
@@ -182,18 +189,20 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
   /** Materializa an expression of int into a constant, this permits to avoid double calls
     */
   private def materializeInt(name: String, value: Expr[Int]): (Expr[Int], Declaration) = {
-    val symbol = createConstant[Int](name)
+    val typedSymbol = createConstant[Int](name)
+    val symbol = typedSymbol.symbol
     val ref = Ref(symbol).asExprOf[Int]
-    (ref, Declaration.Impl(symbol, value))
+    (ref, Declaration.Impl(typedSymbol, value))
   }
 
   private def materializeFunction[IN: Type, OUT: Type](name: String, function: Expr[IN => OUT]): (Expr[IN => OUT], List[Declaration]) = {
     if (isDirectLambda(function.asTerm)) {
       (function, Nil)
     } else {
-      val symbol = createConstant[IN => OUT](name)
+      val typedSymbol = createConstant[IN => OUT](name)
+      val symbol = typedSymbol.symbol
       val ref = Ref(symbol).asExprOf[IN => OUT]
-      (ref, List(Declaration.Impl(symbol, function)))
+      (ref, List(Declaration.Impl(typedSymbol, function)))
     }
   }
 

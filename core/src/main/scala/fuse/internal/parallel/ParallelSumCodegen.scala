@@ -29,7 +29,7 @@ private[fuse] final class ParallelSumCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerat
       }
       ${ reduceParallelSum[T]('{ partials }, '{ chunks }) }
     }
-    List(ValDef(parallel.returnSymbol, Some(resultExpr.asTerm.changeOwner(parallel.returnSymbol))))
+    List(ValDef(parallel.returnSymbol.symbol, Some(resultExpr.asTerm.changeOwner(parallel.returnSymbol.symbol))))
   }
 
   private def createChunkProcessingCode[T <: Summable: Type](
@@ -42,8 +42,8 @@ private[fuse] final class ParallelSumCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerat
   ): Expr[Unit] = {
     val from = '{ ($idx.toLong * $sourceSize / $chunks).toInt }
     val until = '{ (($idx.toLong + 1L) * $sourceSize / $chunks).toInt }
-    val fromDef = ValDef(par.from, Some(from.asTerm))
-    val untilDef = ValDef(par.to, Some(until.asTerm))
+    val fromDef = ValDef(par.from.symbol, Some(from.asTerm))
+    val untilDef = ValDef(par.to.symbol, Some(until.asTerm))
     val statements = par.statements.flatMap(lowerOp)
     val res = lowerValue(combiner.localResult)
     val resVal = '{ $partials($idx) = $res }.asTerm

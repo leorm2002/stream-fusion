@@ -280,7 +280,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   }
 
   def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, R], collector: Expr[CollectorBase[A, Buf, R]]): Program[R] = {
-    val collectorSymbol = createConstant("collector", collector.asTerm.tpe.widen)
+    val collectorSymbol = createConstant[CollectorBase[A, Buf, R]]("collector")
     val bufferSymbol = createConstant[Buf]("buffer")
     val collectorRef = SymbolRef[CollectorBase[A, Buf, R]](collectorSymbol)
     val bufferRef = SymbolRef[Buf](bufferSymbol)
@@ -288,7 +288,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     val emit: Emit[A] = emitted => {
       val accumulate = CollectorAccumulate(collectorRef, bufferRef, emitted.elem)
       optimizedStream.collectionStrategy.earlyExitVar match {
-        case Some(exitRef) => Op.If(accumulate, AssignVal(exitRef.asTerm.symbol, ConstantVal(false)))
+        case Some(exitRef) => Op.If(accumulate, AssignVal(TypedSymbol[Boolean](exitRef.asTerm.symbol), ConstantVal(false)))
         case None          => Compute(accumulate)
       }
     }
@@ -311,7 +311,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       collector: Expr[CollectorBase[A, Buf, R]]
   ): Program[R] = {
     given Type[ParallelCollector[A, Buf, R]] = Type.of[ParallelCollector[A, Buf, R]]
-    val collectorSymbol = createConstant("collector", collector.asTerm.tpe.widen)
+    val collectorSymbol = createConstant[ParallelCollector[A, Buf, R]]("collector")
     val localBufferSymbol = createConstant[Buf]("localBuffer")
     val resultSymbol = createConstant[R]("parallelResult")
     val fromSymbol = createConstant[Int]("from")
@@ -381,12 +381,13 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
 
   private def buildSlice[OUT](slice: EnrichedSlice[OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
     val counterRef = slice.counterRef
+    val counterRefSymbol = slice.counterRefSymbol
     val upstreamEmit: Emit[OUT] = emitted => {
       val output = slice.from match {
         case Some(from) => Op.If(GreaterThanOrEqual(ScalaExpr(counterRef), ScalaExpr(from)), emit(emitted))
         case None       => emit(emitted)
       }
-      CodeBlock(List(output, Inc(counterRef.asTerm.symbol)))
+      CodeBlock(List(output, Inc(counterRefSymbol)))
     }
 
     buildBody(slice.upstream, upstreamEmit, exitPredicates, range)
@@ -486,7 +487,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       nextElement: Value[OUT],
       emit: Emit[OUT],
       exitPredicates: List[Expr[Boolean]],
-      indexSymbol: Option[Symbol] = None,
+      indexSymbol: Option[TypedSymbol[Int]] = None,
       from: Value[Int] = ConstantVal(0)
   ): Op = {
     // Test early exits before hasNext, which may itself advance or evaluate a lazy source.
@@ -562,7 +563,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       case JIterableSource(term, outType)                                                                                    => None
       case Filter(upstream, predicate, outType)                                                                              => getParallelSourceSize(upstream)
       case Map(upstream, function, inType, outType)                                                                          => getParallelSourceSize(upstream)
-      case EnrichedSlice(upstream, from, until, outType, counterRef)                                                         => None
+      case EnrichedSlice(upstream, from, until, outType, counterRef, _)                                                      => None
       case EnrichedFlatMap(upstream, innerStream, inType, outType, binder, innerDeclarations, innerMaterialized, predicates) => getParallelSourceSize(upstream)
     }
   }

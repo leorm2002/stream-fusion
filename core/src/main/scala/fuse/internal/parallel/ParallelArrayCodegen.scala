@@ -37,7 +37,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
         }
       }
     }
-    List(ValDef(parallel.returnSymbol, Some(resultExpr.asTerm.changeOwner(parallel.returnSymbol))))
+    List(ValDef(parallel.returnSymbol.symbol, Some(resultExpr.asTerm.changeOwner(parallel.returnSymbol.symbol))))
   }
 
   private def createArrayChunkProcessingCode[E: Type](
@@ -52,8 +52,8 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
 
     val from = '{ ($chunkIdx.toLong * $sourceSize / $chunks).toInt }
     val until = '{ ((($chunkIdx + 1).toLong * $sourceSize) / $chunks).toInt }
-    val fromDef = ValDef(parallel.from, Some(from.asTerm))
-    val untilDef = ValDef(parallel.to, Some(until.asTerm))
+    val fromDef = ValDef(parallel.from.symbol, Some(from.asTerm))
+    val untilDef = ValDef(parallel.to.symbol, Some(until.asTerm))
     val statements = parallel.statements.flatMap(lowerOp)
     val localArray = lowerValue(concat.localResult)
 
@@ -138,8 +138,8 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
   private def createDirectChunkProcessingCode[E: Type](parallel: Parallel[Array[E]], chunkIdx: Expr[Int], sourceSize: Expr[Int], chunks: Expr[Int]): Expr[Unit] = {
     val from = '{ ($chunkIdx.toLong * $sourceSize / $chunks).toInt }
     val until = '{ ((($chunkIdx + 1).toLong * $sourceSize) / $chunks).toInt }
-    val fromDef = ValDef(parallel.from, Some(from.asTerm))
-    val untilDef = ValDef(parallel.to, Some(until.asTerm))
+    val fromDef = ValDef(parallel.from.symbol, Some(from.asTerm))
+    val untilDef = ValDef(parallel.to.symbol, Some(until.asTerm))
     val statements = parallel.statements.flatMap(lowerOp)
     Block(fromDef :: untilDef :: statements, Literal(UnitConstant())).changeOwner(chunkIdx.asTerm.symbol.owner).asExprOf[Unit]
   }

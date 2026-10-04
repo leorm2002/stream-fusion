@@ -87,16 +87,16 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
       case declare: Declare[t]          => {
         given Type[t] = declare.initialValue.valueType
         // Initializers can contain lambdas or local classes whose definitions now belong to this val.
-        val initializer = lowerValue[t](declare.initialValue).asTerm.changeOwner(declare.symbol)
-        List(ValDef(declare.symbol, Some(initializer)))
+        val initializer = lowerValue[t](declare.initialValue).asTerm.changeOwner(declare.symbol.symbol)
+        List(ValDef(declare.symbol.symbol, Some(initializer)))
       }
       case assign: AssignVal[t] => {
         given Type[t] = assign.value.valueType
         val valueExpr = lowerValue[t](assign.value)
-        List(Assign(Ref(assign.symbol), valueExpr.asTerm))
+        List(Assign(Ref(assign.symbol.symbol), valueExpr.asTerm))
       }
       case Inc(symbol) => {
-        val counterRef = Ref(symbol)
+        val counterRef = Ref(symbol.symbol)
         val incrementTerm = Assign(counterRef, Select.overloaded(counterRef, "+", Nil, List(Literal(IntConstant(1)))))
         List(incrementTerm)
       }
@@ -143,7 +143,7 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
   def lowerValue[T: Type](value: Value[T]): Expr[T] = {
     value match {
       // Crea un Term da un quotes.reflect.Symbol e lo converte in Expr[T]
-      case SymbolRef(symbol) => Ref(symbol).asExprOf[T]
+      case SymbolRef(symbol) => Ref(symbol.symbol).asExprOf[T]
       case ScalaExpr(expr)   => expr
       case ConstantVal(expr) => expr
 

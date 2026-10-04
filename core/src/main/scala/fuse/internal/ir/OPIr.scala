@@ -17,6 +17,7 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
   private given macroQuotes: quotes.type = quotes
 
   import quotes.reflect.*
+  import streamIr.TypedSymbol
 
   enum ParallelCombine[OUT] {
     case Sum[T <: Summable](zero: Value[T], localResult: Value[T]) extends ParallelCombine[T]
@@ -35,10 +36,10 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
   enum Op {
 
     case Parallel[OUT](
-        returnSymbol: Symbol,
+        returnSymbol: TypedSymbol[OUT],
         collectionSize: Value[Int],
-        from: Symbol,
-        to: Symbol,
+        from: TypedSymbol[Int],
+        to: TypedSymbol[Int],
         statements: List[Op],
         combiner: ParallelCombine[OUT]
     )
@@ -47,11 +48,11 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
 
     case CodeBlock(ops: List[Op])
 
-    case Declare[T](symbol: Symbol, initialValue: Value[T])
+    case Declare[T](symbol: TypedSymbol[T], initialValue: Value[T])
 
-    case AssignVal[T](symbol: Symbol, value: Value[T])
+    case AssignVal[T](symbol: TypedSymbol[T], value: Value[T])
 
-    case Inc(symbol: Symbol)
+    case Inc(symbol: TypedSymbol[Int])
 
     case If(condition: Value[Boolean], thenBody: Op, elseBody: Option[Op] = None)
 
@@ -93,7 +94,7 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
 
   final case class ScalaExpr[T](expr: Expr[T])(using val valueType: Type[T]) extends Value[T]
 
-  final case class SymbolRef[T](symbol: Symbol)(using val valueType: Type[T]) extends Value[T]
+  final case class SymbolRef[T](symbol: TypedSymbol[T])(using val valueType: Type[T]) extends Value[T]
 
   final case class ConstantVal[T] private (expr: Expr[T])(using val valueType: Type[T]) extends Value[T]
 
@@ -108,7 +109,7 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
   final case class ArrayRead[T](array: Value[Array[T]], index: Value[Int])(using val valueType: Type[T]) extends Value[T]
 
   object ArrayRead {
-    def apply[T: Type](array: Expr[Array[T]], index: Symbol): ArrayRead[T] = new ArrayRead[T](ScalaExpr(array), SymbolRef[Int](index))
+    def apply[T: Type](array: Expr[Array[T]], index: TypedSymbol[Int]): ArrayRead[T] = new ArrayRead[T](ScalaExpr(array), SymbolRef[Int](index))
   }
 
   final case class ArrayLength[A](array: Value[Array[A]])(using val elemType: Type[A]) extends Value[Int] {
@@ -177,7 +178,7 @@ private[internal] class OPIr[IR <: AnyIR](val streamIr: IR) {
 
   final case class Add[T <: Summable](left: Value[T], right: Value[T])(using val valueType: Type[T]) extends Value[T]
   object Add {
-    def apply[T <: Summable: Type](left: Symbol, right: Value[T]): Add[T] = new Add[T](SymbolRef[T](left), right)
+    def apply[T <: Summable: Type](left: TypedSymbol[T], right: Value[T]): Add[T] = new Add[T](SymbolRef[T](left), right)
   }
 
   final case class Subtract(

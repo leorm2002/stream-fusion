@@ -174,7 +174,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
         // The code generator later will emit a ValDef for this symbol, binding it to the actual current upstream element.
         // We use this trick in order to betareduce the expression thus parsing the inner stream definition
         val flatMapBinder = createConstant[In]("flatMapElem")
-        val elemRef = Ref(flatMapBinder).asExprOf[In]
+        val elemRef = Ref(flatMapBinder.symbol).asExprOf[In]
 
         // Converts: x => from(source(x)).map(...)
         // into: from(source(elemRef)).map(...) linking against the just created binder
