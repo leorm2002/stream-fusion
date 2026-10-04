@@ -8,10 +8,8 @@ import munit.FunSuite
 
 import FusedStream.*
 
-/** Test end-to-end per le operazioni sequenziali di FusedStream:
-  * sorgenti (List, Array con Int, Double, String), trasformazioni (map, filter, flatMap),
-  * operatori di slice (skip, limit), collezioni terminali (findFirst, toList)
-  * e controlli statici di tipo sui metodi map e flatMap.
+/** Test end-to-end per le operazioni sequenziali di FusedStream: sorgenti (List, Array con Int, Double, String), trasformazioni (map, filter, flatMap), operatori di slice (skip,
+  * limit), collezioni terminali (findFirst, toList) e controlli statici di tipo sui metodi map e flatMap.
   */
 object SequentialStreamTest {
 
@@ -286,7 +284,6 @@ class SequentialStreamTest extends FunSuite {
 
     assertEquals(result, expected)
   }
-  // TODO: ha un errore e non blocca gli infiniti
 
   // --- 2. ARRAY INT ---
   test("flatMap infinite repeater from Array Int with limits and map") {

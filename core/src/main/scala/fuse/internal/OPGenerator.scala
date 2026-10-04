@@ -93,7 +93,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val fromSymbol = createConstant[Int]("from")
         val untilSymbol = createConstant[Int]("until")
 
-        // Dichiaro l'array con TODO: size uguale al range
+        // Dichiaro l'array con  size uguale al range
         val localSize = Subtract(SymbolRef[Int](untilSymbol), SymbolRef[Int](fromSymbol))
         val arrayDeclare = Declare(localVec, ArrayDefine[OUT](localSize)) // Declare the array
 
