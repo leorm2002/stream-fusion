@@ -22,9 +22,9 @@ trait Combinable[B] {
 }
 
 sealed trait CollectorBase[E, B, R] {
-  def supplier(): B
-  def accumulator(buf: B, E: E): Boolean
-  def finisher(buf: B): R
+  inline def supplier(): B
+  inline def accumulator(buf: B, E: E): Boolean
+  inline def finisher(buf: B): R
 }
 
 trait Collector[E, B, R, S <: TerminationPolicy] extends CollectorBase[E, B, R]
