@@ -4,8 +4,6 @@ import scala.quoted.Quotes
 import scala.quoted.Expr
 import scala.quoted.Type
 import scala.collection.mutable.ArrayBuilder
-import javax.smartcardio.Card
-import scala.annotation.elidable
 import fuse.internal.{CollectionStrategy, EnrichedCollectionStrategy}
 
 // Alias the StreamIr to a type combined with singleton. this will guarantee no problem with path deendant type
@@ -73,7 +71,7 @@ private[internal] class StreamIr(using val quotes: Quotes) {
     def upstream: StreamTree[P, A]
   }
 
-  /** Represents a node of abstract syntax treetree */
+  /** Represents a node of abstract syntax tree */
   enum StreamTree[P <: Phase, A] {
     def outType: Type[A]
 
