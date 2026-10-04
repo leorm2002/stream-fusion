@@ -13,11 +13,9 @@ import RuntimeConfig.*
 import fuse.Collector
 import scala.collection.mutable.ListBuffer
 
-/** Test end-to-end per gli stream paralleli di FusedStream:
-  * esecuzione parallela con partizionamento dei dati, collector paralleli (toArray, summing),
-  * rispetto dell'ordinamento della sorgente (Exact e Unknown), scalabilità con thread pool e worker multipli,
-  * configurazione di chunking e chunksPerWorker, gestione degli overflow aritmetici,
-  * propagazione degli errori nel runtime ed errori di tipo a compile-time (vincoli di parallelismo).
+/** Test end-to-end per gli stream paralleli di FusedStream: esecuzione parallela con partizionamento dei dati, collector paralleli (toArray, summing), rispetto dell'ordinamento
+  * della sorgente (Exact e Unknown), scalabilità con thread pool e worker multipli, configurazione di chunking e chunksPerWorker, gestione degli overflow aritmetici, propagazione
+  * degli errori nel runtime ed errori di tipo a compile-time (vincoli di parallelismo).
   */
 class ParallelStreamTest extends FunSuite {
 
@@ -189,7 +187,6 @@ class ParallelStreamTest extends FunSuite {
 
   test("Parallel + UpperBound collects filtered results in source order") {
     given RuntimeConfig = RuntimeConfig.default.copy(workerCount = 2, chunksPerWorker = 2)
-    inline given CompileConfig = new CompileConfig(useUnsafe = false, enableLogging = true)
     val nums = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 
     val result = FusedStream

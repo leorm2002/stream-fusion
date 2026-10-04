@@ -10,10 +10,9 @@ import FusedStream.*
 import RuntimeConfig.*
 import fuse.Collector
 
-/** Test end-to-end per le tipologie di sorgenti e i collector di FusedStream:
-  * sorgenti Scala (List, Array) e Java (Iterable, ArrayList, LinkedList, accesso unsafe alla backing array),
-  * collezioni esaustive e short-circuiting (toList, toSet, toArray, summing, findFirst, collector generici custom),
-  * builder dinamici per tipi primitivi, preservazione dei valori nulli e conteggio corretto degli accessi agli iteratori.
+/** Test end-to-end per le tipologie di sorgenti e i collector di FusedStream: sorgenti Scala (List, Array) e Java (Iterable, ArrayList, LinkedList, accesso unsafe alla backing
+  * array), collezioni esaustive e short-circuiting (toList, toSet, toArray, summing, findFirst, collector generici custom), builder dinamici per tipi primitivi, preservazione dei
+  * valori nulli e conteggio corretto degli accessi agli iteratori.
   */
 class SourceAndCollectorTest extends FunSuite {
 
@@ -327,7 +326,7 @@ class SourceAndCollectorTest extends FunSuite {
   }
 
   test("Unsafe ArrayList access reads the backing array only up to the logical size") {
-    inline given CompileConfig = CompileConfig(useUnsafe = true, enableLogging = false)
+    inline given CompileConfig = CompileConfig(useUnsafe = true, enableLogging = false, strictInlining = true)
     val source = new java.util.ArrayList[Int](20) {
       override def get(index: Int): Int = throw new AssertionError("Unsafe access must read the backing array")
     }
@@ -339,7 +338,7 @@ class SourceAndCollectorTest extends FunSuite {
   }
 
   test("Unsafe configuration keeps the iterator fallback and flatMap bindings for other Java lists") {
-    inline given CompileConfig = CompileConfig(useUnsafe = true, enableLogging = false)
+    inline given CompileConfig = CompileConfig(useUnsafe = true, enableLogging = false, strictInlining = true)
     javaLists(1, 2).foreach { source =>
       val result = FusedStream.from(source).flatMap(n => FusedStream.from(Array(n, n + 10)).limit(1)).collect(Collector.toArray)
       assertEquals(result.toList, List(1, 2))

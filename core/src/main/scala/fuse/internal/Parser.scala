@@ -38,7 +38,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     debug("Starting to parse the terminal")
     debug(collector.asTerm.show)
 
-    val parsedCollector = extractCollectionStrategy(collector)
+    val parsedCollector = extractCollectionStrategy(collector, executionMode)
     debug("Terminal parsing done")
     debug("Parsing the done")
 
@@ -211,9 +211,9 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     }
   }
 
-  private def extractCollectionStrategy[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](
-      collector: Expr[Collector[A, Buf, R, S]]
-  )(using Quotes): CollectionStrategy[A, Buf, R] = {
+  private def extractCollectionStrategy[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](collector: Expr[Collector[A, Buf, R, S]], executionMode: ExecutionMode)(using
+      Quotes
+  ): CollectionStrategy[A, Buf, R] = {
 
     // Check if we are treating the "fake" toArray collector
     val rawTpe = collector.asTerm.tpe
@@ -249,13 +249,9 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
       Summing[A & Summable]().asInstanceOf[CollectionStrategy[A, Buf, R]]
     } else {
       debug(" --> is a generic collector")
-      // To guarantee the inlining of collector methods we must force the user to implement a collector
-      val collectorClass = dealiasedTpe.typeSymbol
-      if (!collectorClass.isClassDef || collectorClass.isAnonymousClass || collectorClass.flags.is(Flags.Trait) || collectorClass.flags.is(Flags.Abstract)) {
-        report.errorAndAbort(
-          "StreamFusion: collect requires a named concrete collector class. Anonymous collectors and references typed as Collector are not supported. ",
-          collector.asTerm.pos
-        )
+      if (logger.compileCfg.strictInlining) {
+        checkCollectorDefinition(collector)
+        checkCollectorInlining[A, Buf](collector, executionMode)
       }
       val collectorBaseType = dealiasedTpe.baseType(TypeRepr.of[Collector].typeSymbol)
 
@@ -266,6 +262,45 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
       val isEarlyStopping = stopPolicy <:< TypeRepr.of[ShortCircuiting]
       WithCollector(collector.asExprOf[CollectorBase[A, Buf, R]], isEarlyStopping)
 
+    }
+  }
+
+  private def checkCollectorDefinition(collector: Expr[?]): Unit = {
+    // Strict inlining requires a named concrete receiver type, exposing the inline implementations.
+    val collectorClass = getTypeRepr(collector.asTerm).typeSymbol
+    if (!collectorClass.isClassDef || collectorClass.isAnonymousClass || collectorClass.flags.is(Flags.Trait) || collectorClass.flags.is(Flags.Abstract)) {
+      report.errorAndAbort(
+        "StreamFusion: collect requires a named concrete collector class when strictInlining is enabled. Anonymous collectors are not supported.",
+        collector.asTerm.pos
+      )
+    }
+  }
+
+  private def checkCollectorInlining[A: Type, Buf: Type](collector: Expr[?], executionMode: ExecutionMode): Unit = {
+    def selectedMethod(term: Term): Symbol = term match {
+      case Apply(fun, _)     => selectedMethod(fun)
+      case TypeApply(fun, _) => selectedMethod(fun)
+      case _                 => term.symbol
+    }
+
+    def requireInline(name: String, arguments: List[Term]): Unit = {
+      val method = selectedMethod(Select.overloaded(collector.asTerm, name, Nil, arguments))
+      if (!method.flags.is(Flags.Inline) || method.flags.is(Flags.Deferred)) {
+        report.errorAndAbort(
+          s"StreamFusion: collector method '$name' must have a concrete inline implementation when strictInlining is enabled.",
+          collector.asTerm.pos
+        )
+      }
+    }
+
+    // Typed placeholders to resolve resolve the items
+    val buffer = '{ null.asInstanceOf[Buf] }.asTerm
+    val element = '{ null.asInstanceOf[A] }.asTerm
+    requireInline("supplier", Nil)
+    requireInline("accumulator", List(buffer, element))
+    requireInline("finisher", List(buffer))
+    if (executionMode == ExecutionMode.Parallel) {
+      requireInline("combine", List(buffer, buffer))
     }
   }
 
