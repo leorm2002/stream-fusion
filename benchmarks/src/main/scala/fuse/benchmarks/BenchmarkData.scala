@@ -47,12 +47,6 @@ class BenchmarkData {
 
     var i = 0
     while (i < size) {
-      val stringValue = if (i % 4 == 0) "" else s"value-${i % 1024}"
-      val personValue = new Person(s"person-${i % 1024}", 10 + (i % 20), false)
-      val pointValue = new Point(
-        if (i % 4 == 0) -i - 1 else i,
-        if (i % 7 == 0) -i - 1 else i
-      )
       val txValue = new Transaction(
         i.toLong,
         i % 1000,
