@@ -14,7 +14,7 @@ project/local-plugins.sbt
 .ensime_cache/
 .sbt-scripted/
 local.sbt
-
+sbt-launch.jar
 # Bloop
 .bsp
 
@@ -33,18 +33,17 @@ metals.sbt
 
 
 # latex
-
 *.aux
 *.fdb_latexmk
 *.fls
 *.log
 *.out
 *.synctex.gz
+*.toc
+*.bbl
+*.blg
 doc/*.pdf
 doc/pdfpages
-*.toc
-relazione/report.blg
-relazione/report.bbl
-relazione/report.toc
-relazione/report.toc
-draw.io
+
+# Local tools
+/draw.io/

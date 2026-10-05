@@ -16,6 +16,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      matrix:
+        java: ['17']
 
     steps:
       - name: Check out repository
@@ -27,14 +30,18 @@ jobs:
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ matrix.java }}
           cache: sbt
 
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
 
+      - name: Check code formatting
+        run: sbt -batch scalafmtCheckAll
+
       - name: Compile
         run: sbt -batch compile
 
-      - name: Run tests
-        run: sbt -batch test
+      - name: Run tests with coverage
+        run: sbt -batch coverage test coverageReport
+
