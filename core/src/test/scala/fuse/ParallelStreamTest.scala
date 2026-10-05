@@ -337,6 +337,38 @@ class ParallelStreamTest extends FunSuite {
     }
   }
 
+  test("exception in a chunk cancels remaining chunks and does not deadlock with small thread pool") {
+    import java.util.concurrent.Executors
+    import java.util.concurrent.atomic.AtomicInteger
+
+    val pool = Executors.newFixedThreadPool(1)
+    try {
+      val config = RuntimeConfig(ExecutionContext.fromExecutor(pool), workerCount = 8, chunksPerWorker = 4)
+      given RuntimeConfig = config
+
+      val values = Array.tabulate(2000)(i => i)
+      val processed = new AtomicInteger(0)
+      val failure = new RuntimeException("chunk failed early")
+
+      val thrown = intercept[RuntimeException] {
+        FusedStream
+          .from(values)
+          .parallel()
+          .map { x =>
+            processed.incrementAndGet()
+            if (x == 10) throw failure
+            x
+          }
+          .collect(Collector.summing)
+      }
+      assertEquals(thrown.getMessage, "chunk failed early")
+      // Since there are 32 chunks and 2000 items, cancelling remaining chunks ensures processed < 2000
+      assert(processed.get() < 2000, s"Expected fewer than 2000 elements processed, but got ${processed.get()}")
+    } finally {
+      pool.shutdownNow()
+    }
+  }
+
   test("parallel sum from java.util.ArrayList matches sequential result") {
     val list = new java.util.ArrayList[Int]()
     var i = 1

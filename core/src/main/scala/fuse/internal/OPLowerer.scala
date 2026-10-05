@@ -354,7 +354,7 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
               override def run(): Unit = {
                 var chunkIdx = firstChunk
                 try {
-                  while (chunkIdx < $chunks) {
+                  while (chunkIdx < $chunks && failed.get() == null) {
                     ${ processChunk('{ chunkIdx }) }
                     chunkIdx = nextChunk.getAndIncrement()
                   }

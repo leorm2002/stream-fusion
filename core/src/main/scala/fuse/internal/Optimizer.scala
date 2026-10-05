@@ -73,10 +73,17 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
     parsedStream match {
       case slice: Slice[OUT] => {
-        // Evaluate slice bounds exactly once
+        // Evaluate slice bounds exactly once and validate non-negative bounds
         val (fromRef, fromDeclarations) = slice.from match {
           case Some(from) => {
-            val (ref, definition) = materializeInt("sliceFrom", from)
+            val (ref, definition) = materializeInt(
+              "sliceFrom",
+              '{
+                val v = $from
+                if (v < 0) throw new IllegalArgumentException(s"skip count cannot be negative: $v")
+                v
+              }
+            )
             (Some(ref), List(definition))
           }
           case None => (None, Nil)
@@ -84,7 +91,14 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
         val (untilRef, untilDeclarations) = slice.until match {
           case Some(until) => {
-            val (ref, definition) = materializeInt("sliceUntil", until)
+            val (ref, definition) = materializeInt(
+              "sliceUntil",
+              '{
+                val v = $until
+                if (v < 0) throw new IllegalArgumentException(s"limit count cannot be negative: $v")
+                v
+              }
+            )
             (Some(ref), List(definition))
           }
           case None => (None, Nil)
@@ -179,8 +193,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
   }
 
-  /** Materializa an expression of int into a constant, this permits to avoid double calls
-    */
+  /** Materialize an expression of Int into a constant, avoiding redundant evaluations */
   private def materializeInt(name: String, value: Expr[Int]): (Expr[Int], Declaration) = {
     val typedSymbol = createConstant[Int](name)
     val ref = typedSymbol.ref
@@ -222,7 +235,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
         val upstream = analyze(filter.upstream)
         upstream.copy(hasAlignedIndexes = false, cardinality = upstream.cardinality.asUpperBound)
       }
-      // TODO: potenzialmente possiamo accumulare le ref alle variabili e definire la size in maniera esatta
+      // potenzialmente possiamo accumulare le ref alle variabili e definire la size in maniera esatta
       case slice: EnrichedSlice[?] => {
         val upstream = analyze(slice.upstream)
         upstream.copy(hasAlignedIndexes = slice.from.isEmpty && upstream.hasAlignedIndexes, cardinality = upstream.cardinality.asUpperBound)

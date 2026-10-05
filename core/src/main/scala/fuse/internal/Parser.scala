@@ -79,7 +79,11 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
       case Apply(Select(upstream, "parallel"), _) => parseTerm(upstream) // it's used just for to type check the stream, all the information have already been used here
 
       /** ==================================== Error fallback ==================================== */
-      case other => report.errorAndAbort(s"StreamFusion: unexpected expression: ${other}")
+      case other =>
+        report.errorAndAbort(
+          s"StreamFusion: unsupported stream expression: ${other.show}. ",
+          other.pos
+        )
     }
   }
 
