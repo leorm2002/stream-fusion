@@ -1,6 +1,6 @@
 // Minimum Scala 3 version required by consumers due to Quotes/Reflection macro capabilities
 val scala3Version = "3.8.4"
-val projectVersion = "0.1.0"
+val projectVersion = "0.1.1"
 
 ThisBuild / organization := "it.ln.stream-fusion"
 ThisBuild / organizationName := "stream-fusion"
