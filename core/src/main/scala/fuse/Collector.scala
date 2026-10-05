@@ -54,7 +54,7 @@ object Collector {
   /** A specialized parallel collector for numeric sums (Int, Long, Float, Double).
     *
     * Note on Float and Double sums in parallel streams: Floating-point addition is non-associative due to rounding error. Consequently, parallel summation of Float or Double
-    * streams may yield results that vary slightly depending on the degree of chunking and concurrency 
+    * streams may yield results that vary slightly depending on the degree of chunking and concurrency
     */
   opaque type SummingCollector[T <: Summable] <: ParallelCollector[T, Any, T] = ParallelCollector[T, Any, T]
   @compileTimeOnly("Collector.summing can only be used as a FusedStream terminal collector")

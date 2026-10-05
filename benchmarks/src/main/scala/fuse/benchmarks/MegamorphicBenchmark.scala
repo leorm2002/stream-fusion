@@ -12,7 +12,6 @@ import scala.jdk.CollectionConverters.*
 /** Benchmark 2: Scenario Megamorfico (Flusso applicativo reale su in-memory store)
   *
   * Simula un flusso di reportistica/analisi aziendale con 8 query eterogenee su un database in-memory rappresentato da un ArrayList di transazioni.
-  *
   */
 @BenchmarkMode(Array(Mode.AverageTime))
 @OutputTimeUnit(TimeUnit.MICROSECONDS)

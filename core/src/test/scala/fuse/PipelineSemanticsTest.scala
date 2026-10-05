@@ -4,11 +4,8 @@ import munit.FunSuite
 
 import FusedStream.*
 
-/** Test end-to-end per la semantica e le proprietà di fusione della pipeline:
-  * preservazione delle dichiarazioni a blocco prima di skip,
-  * valutazione singola delle espressioni di skip, limit, mapper e predicati,
-  * correttezza della fusione di mappe e filtri successivi,
-  * e gestione dei limiti di slice (from/until).
+/** Test end-to-end per la semantica e le proprietà di fusione della pipeline: preservazione delle dichiarazioni a blocco prima di skip, valutazione singola delle espressioni di
+  * skip, limit, mapper e predicati, correttezza della fusione di mappe e filtri successivi, e gestione dei limiti di slice (from/until).
   */
 class PipelineSemanticsTest extends FunSuite {
 
