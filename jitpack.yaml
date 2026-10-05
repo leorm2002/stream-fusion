@@ -1,5 +1,2 @@
 jdk:
   - openjdk21
-
-install:
-  - sbt "project core" publishM2
