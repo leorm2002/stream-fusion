@@ -50,8 +50,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
       chunks: Expr[Int]
   ): Expr[Unit] = {
 
-    val from = '{ ($chunkIdx.toLong * $sourceSize / $chunks).toInt }
-    val until = '{ ((($chunkIdx + 1).toLong * $sourceSize) / $chunks).toInt }
+    val (from, until) = opGenerator.chunkBounds(chunkIdx, sourceSize, chunks)
     val fromDef = ValDef(parallel.from.symbol, Some(from.asTerm))
     val untilDef = ValDef(parallel.to.symbol, Some(until.asTerm))
     val statements = parallel.statements.flatMap(lowerOp)
@@ -136,8 +135,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
   }
 
   private def createDirectChunkProcessingCode[E: Type](parallel: Parallel[Array[E]], chunkIdx: Expr[Int], sourceSize: Expr[Int], chunks: Expr[Int]): Expr[Unit] = {
-    val from = '{ ($chunkIdx.toLong * $sourceSize / $chunks).toInt }
-    val until = '{ ((($chunkIdx + 1).toLong * $sourceSize) / $chunks).toInt }
+    val (from, until) = opGenerator.chunkBounds(chunkIdx, sourceSize, chunks)
     val fromDef = ValDef(parallel.from.symbol, Some(from.asTerm))
     val untilDef = ValDef(parallel.to.symbol, Some(until.asTerm))
     val statements = parallel.statements.flatMap(lowerOp)

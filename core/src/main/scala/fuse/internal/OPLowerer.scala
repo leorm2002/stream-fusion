@@ -330,6 +330,12 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
     Apply(typedCtor, List(size.asTerm)).asExprOf[Array[A]]
   }
 
+  private[fuse] def chunkBounds(chunkIdx: Expr[Int], sourceSize: Expr[Int], chunks: Expr[Int]): (Expr[Int], Expr[Int]) = {
+    val from = '{ (($chunkIdx.toLong * $sourceSize) / $chunks).toInt }
+    val until = '{ ((($chunkIdx.toLong + 1L) * $sourceSize) / $chunks).toInt }
+    (from, until)
+  }
+
   // Specialization for the specialized sum operator
 
   def processParallelChunks(chunks: Expr[Int], workers: Expr[Int])(processChunk: Expr[Int] => Expr[Unit]): Expr[Unit] = {

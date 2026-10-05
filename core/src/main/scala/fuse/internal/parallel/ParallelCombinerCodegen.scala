@@ -57,8 +57,7 @@ private[fuse] final class ParallelCombinerCodegen[OPIR <: AnyOPIR, G <: OPCodeGe
       chunks: Expr[Int],
       combiner: ParallelCombine.GenericCombiner[A, Buf, R]
   ): Expr[Unit] = {
-    val from = '{ ($chunkIdx * $sourceSize / $chunks) }
-    val until = '{ ((($chunkIdx + 1) * $sourceSize) / $chunks) }
+    val (from, until) = opGenerator.chunkBounds(chunkIdx, sourceSize, chunks)
     val fromDef = ValDef(parallel.from.symbol, Some(from.asTerm))
     val untilDef = ValDef(parallel.to.symbol, Some(until.asTerm))
     val statements = parallel.statements.flatMap(lowerOp)

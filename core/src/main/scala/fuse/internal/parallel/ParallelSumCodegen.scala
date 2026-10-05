@@ -40,8 +40,7 @@ private[fuse] final class ParallelSumCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerat
       chunks: Expr[Int],
       combiner: ParallelCombine.Sum[T]
   ): Expr[Unit] = {
-    val from = '{ ($idx.toLong * $sourceSize / $chunks).toInt }
-    val until = '{ (($idx.toLong + 1L) * $sourceSize / $chunks).toInt }
+    val (from, until) = opGenerator.chunkBounds(idx, sourceSize, chunks)
     val fromDef = ValDef(par.from.symbol, Some(from.asTerm))
     val untilDef = ValDef(par.to.symbol, Some(until.asTerm))
     val statements = par.statements.flatMap(lowerOp)
