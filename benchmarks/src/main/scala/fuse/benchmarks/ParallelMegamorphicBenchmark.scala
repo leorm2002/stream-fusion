@@ -18,9 +18,9 @@ import org.openjdk.jmh.infra.Blackhole
   */
 @BenchmarkMode(Array(Mode.AverageTime))
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
-@Warmup(iterations = 3, time = 400, timeUnit = TimeUnit.MILLISECONDS)
-@Measurement(iterations = 5, time = 400, timeUnit = TimeUnit.MILLISECONDS)
-@Fork(1)
+@Warmup(iterations = 5, time = 2, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 5, time = 2, timeUnit = TimeUnit.SECONDS)
+@Fork(3)
 @State(Scope.Thread)
 class ParallelMegamorphicBenchmark {
 
