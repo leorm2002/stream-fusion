@@ -27,17 +27,17 @@ object FusedStream {
   @compileTimeOnly("FusedStream.from can only be used in a pipeline terminated by .collect(...)")
   def from[A](source: java.util.ArrayList[A]): ParallelizableSource[A] = compileTimeOnly
 
-  /** Creates a stream from a single element, will throw an exception if the source element is null
+  /** Creates a stream containing a single element (null elements are permitted).
     * @param source
-    *   the only element in the stream, must not be null
+    *   the single element in the stream
     */
   @compileTimeOnly("FusedStream.of can only be used in a pipeline terminated by .collect(...)")
   def of[A](source: A): SequentialStream[A] = compileTimeOnly
 
   extension [A](inline self: SequentialStream[A]) {
 
-    /** Terminal collection. With CompileConfig.strictInlining enabled, custom collectors must expose
-      * a named concrete receiver type and inline operations; anonymous collectors and abstract receiver types are rejected.
+    /** Terminal collection. With CompileConfig.strictInlining enabled, custom collectors must expose a named concrete receiver type and inline operations; anonymous collectors and
+      * abstract receiver types are rejected.
       */
     inline def collect[Buf, R, S <: TerminationPolicy](inline collector: Collector[A, Buf, R, S])(using inline compileCfg: CompileConfig, runCfg: RuntimeConfig): R = ${
       Macro.collectSeq[A, Buf, R, S]('self, 'collector, 'compileCfg, 'runCfg)
@@ -47,8 +47,8 @@ object FusedStream {
 // The parallel stream needs a special type of collector which can be
   extension [A](inline self: ParallelStream[A]) {
 
-    /** Parallel terminal collection. With CompileConfig.strictInlining enabled, custom collectors must expose
-      * a named concrete receiver type and inline operations; anonymous collectors and abstract receiver types are rejected.
+    /** Parallel terminal collection. With CompileConfig.strictInlining enabled, custom collectors must expose a named concrete receiver type and inline operations; anonymous
+      * collectors and abstract receiver types are rejected.
       */
     inline def collect[Buf, R](inline collector: ParallelCollector[A, Buf, R])(using inline compileCfg: CompileConfig, runCfg: RuntimeConfig): R = ${
       Macro.collectPar[A, Buf, R]('self, 'collector, 'compileCfg, 'runCfg)

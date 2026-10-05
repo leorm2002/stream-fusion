@@ -38,8 +38,15 @@ private[fuse] object Macro {
       runCfg: Expr[RuntimeConfig],
       executionMode: ExecutionMode
   )(using q: Quotes): Expr[R] = {
-
-    val compileCfg = compileCfgExpr.valueOrAbort
+    import quotes.reflect.*
+    val compileCfg = compileCfgExpr.value.getOrElse {
+      report.errorAndAbort(
+        s"StreamFusion: CompileConfig must be known at compile time with literal boolean arguments " +
+          s"(e.g., inline given CompileConfig = CompileConfig(useUnsafe = false, enableLogging = false, strictInlining = true)). " +
+          s"Dynamic expressions or non-literal values cannot be extracted by the macro. Received: ${compileCfgExpr.show}",
+        compileCfgExpr.asTerm.pos
+      )
+    }
     // The intermediate representation is istantiated in a class, to handle the Quotes istance being path dependand
     // the ir will passed to every step of the transpiler which will use it's quotes istnace as it's own
     val ir = StreamIr()

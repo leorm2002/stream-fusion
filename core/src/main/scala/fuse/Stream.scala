@@ -48,7 +48,10 @@ sealed trait SequentialStream[A] extends Stream[A] {
   */
 sealed trait ParallelizableSource[A] extends SequentialStream[A] {
 
-  /** If added to the pipeline the library will try to make the stream parallel, if it's not possible a compilation error will be emitted
+  /** If added to the pipeline the library will try to make the stream parallel, if it's not possible a compilation error will be emitted.
+    *
+    * Note: For floating-point operations (Float, Double sums), parallel evaluation may produce slightly different rounding results compared to sequential execution due to
+    * non-associativity of floating-point arithmetic.
     */
   def parallel(): ParallelStream[A]
 

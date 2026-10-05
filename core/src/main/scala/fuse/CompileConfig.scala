@@ -2,7 +2,15 @@ package fuse
 
 import scala.quoted.*
 
-/** Represents the configuration for the compile time generation.
+/** Represents the configuration for the compile-time code generation.
+  *
+  * NOTE: Instances of `CompileConfig` used with `FusedStream.collect` MUST be supplied as compile-time inline constants with literal boolean arguments (e.g.
+  * `CompileConfig(useUnsafe = false, enableLogging = false, strictInlining = true)`). Non-literal values cannot be extracted by the macro and will emit a compilation error.
+  *
+  * @param useUnsafe
+  *   Use VarHandle to read java.util.ArrayList's internal array directly (requires `--add-opens java.base/java.util=ALL-UNNAMED`).
+  * @param enableLogging
+  *   Print compiler debug messages and generated code during macro expansion.
   * @param strictInlining
   *   Require a named concrete receiver type and inline implementations of the collector operations used by the pipeline.
   */

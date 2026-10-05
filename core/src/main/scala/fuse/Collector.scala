@@ -21,8 +21,7 @@ trait Combinable[B] {
   def combine(left: B, right: B): B
 }
 
-/** Collector operations may be ordinary or inline methods.
-  * CompileConfig.strictInlining requires inline implementations at the collect call site.
+/** Collector operations may be ordinary or inline methods. CompileConfig.strictInlining requires inline implementations at the collect call site.
   */
 sealed trait CollectorBase[E, B, R] {
   def supplier(): B
@@ -32,7 +31,11 @@ sealed trait CollectorBase[E, B, R] {
 
 trait Collector[E, B, R, S <: TerminationPolicy] extends CollectorBase[E, B, R]
 
-/** A parallel collector: it have alle the attributes to be used in a parallel algorithm: it' combinable and have no early exit
+/** Contract for parallel collectors:
+  *   - The collector instance is shared among worker threads; it must be stateless.
+  *   - `supplier` and `accumulator` are invoked concurrently across parallel chunk tasks. `supplier()` must allocate an independent, thread-confined intermediate buffer for each
+  *     chunk.
+  *   - Final reduction of partial chunk buffers is executed sequentially in the original chunk order.
   */
 trait ParallelCollector[E, B, R] extends Collector[E, B, R, Exhaustive] with Combinable[B]
 
@@ -48,6 +51,11 @@ object Collector {
   @compileTimeOnly("Collector.toArray can only be used as a FusedStream terminal collector")
   def toArray[T]: ToArrayCollector[T] = null.asInstanceOf[ToArrayCollector[T]]
 
+  /** A specialized parallel collector for numeric sums (Int, Long, Float, Double).
+    *
+    * Note on Float and Double sums in parallel streams: Floating-point addition is non-associative due to rounding error. Consequently, parallel summation of Float or Double
+    * streams may yield results that vary slightly depending on the degree of chunking and concurrency 
+    */
   opaque type SummingCollector[T <: Summable] <: ParallelCollector[T, Any, T] = ParallelCollector[T, Any, T]
   @compileTimeOnly("Collector.summing can only be used as a FusedStream terminal collector")
   def summing[T <: Summable]: SummingCollector[T] = null.asInstanceOf[SummingCollector[T]]
