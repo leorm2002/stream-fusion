@@ -274,8 +274,8 @@ Al fine di garantire la predicibilità prestazionale e la robustezza del compila
   \\[0.5em]
 
   \textbf{RN-4} &
-  \textbf{Nessun fall-back silente a runtime.}
-  Se una composizione di stream viola i vincoli di tipo o non ne è possibile tra transpilazione, il compilatore deve rigettare esplicitamente il programma tramite un errore di tipo statico o errore di compilazione della macro, senza ricorrere a conversioni opache o errori a runtime.
+  \textbf{Errori parlanti e assenza di fall-back a runtime.}
+  Se una pipeline viola i vincoli del framework il compilatore deve rigettare esplicitamente il programma tramite messaggi d'errore posizionati e descrittivi o conversioni nascoste a runtime.
   \\[0.5em]
 
   \textbf{RN-5} &
@@ -289,7 +289,7 @@ Al fine di garantire la predicibilità prestazionale e la robustezza del compila
 \begin{longtable}{@{}p{0.12\textwidth}p{0.84\textwidth}@{}}
   \textbf{RNF-1} &
   \textbf{Prestazioni a runtime.}
-  Il codice generato deve esibire un throughput comparabile a codice efficiente scritto manualmente in Java, riducendo l'overhead computazionale rispetto alle pipeline funzionali convenzionali ed azzerando il boxing introdotto dalla libreria per i tipi primitivi.
+  Il codice generato deve esibire un throughput comparabile a codice efficiente scritto manualmente in Java, riducendo l'overhead computazionale rispetto alle pipeline funzionali convenzionali. Per sorgenti a oggetti generici il boxing il comportamento standard della JVM.
   \\[0.5em]
 
   \textbf{RNF-2} &
@@ -541,10 +541,9 @@ L'API pubblica, descritta nella Sezione~\ref{sec:api}, espone il modello con cui
 
 Come mostrato in Figura~\ref{fig:system_architecture}, il flusso di compilazione parte dalla Public API e termina con la produzione del codice eseguibile. Il \emph{Macro Entry Point} costituisce il punto di ingresso del compilatore e orchestra le diverse fasi di trasformazione.
 
-Il \emph{Parser} analizza l'AST Scala della pipeline e ne ricostruisce la rappresentazione logica nella \emph{Stream IR}. Parallelamente, il collector e la configurazione vengono analizzati per determinare rispettivamente la strategia terminale e i parametri che influenzano la generazione e l'esecuzione del codice. L'output di questa fase è un \emph{FusedStream Ast} che contiene tutte le informazioni estratte.
+Il \emph{Parser} analizza l'AST Scala della pipeline e ne ricostruisce la rappresentazione logica nella \emph{Stream IR}. Parallelamente, il collector e la configurazione vengono analizzati per determinare rispettivamente la strategia terminale e i parametri che influenzano la generazione e l'esecuzione del codice. L'output di questa fase è un \emph{Ast} che contiene tutte le informazioni estratte.
 
-L'AST viene successivamente analizzata ed estesa dalla fase di \emph{Enrichment}, che associa alla pipeline le informazioni statiche necessarie alla pianificazione dell'esecuzione, tra cui proprietà della sorgente, cardinalità e condizioni di terminazione. Questa fase produce un \emph{Enriched FusedStream Ast} che viene poi passato all'\emph{OP IR Generator} che utilizza questa rappresentazione arricchita per produrre la \emph{Operation IR} (OP IR), nella quale le operazioni logiche della pipeline vengono trasformate in un piano orientato all'esecuzione.
-
+L'AST viene successivamente analizzata ed estesa dalla fase di \emph{Enrichment}, che associa alla pipeline le informazioni statiche necessarie alla pianificazione dell'esecuzione, tra cui proprietà della sorgente, cardinalità e condizioni di terminazione. Questa fase produce un \emph{AstExt} che viene poi passato all'\emph{OP IR Generator} che utilizza questa rappresentazione arricchita per produrre la \emph{Operation IR} (OP IR), nella quale le operazioni logiche della pipeline vengono trasformate in un piano orientato all'esecuzione.
 Infine, il \emph{Lowering} traduce la OP IR in un nuovo AST Scala, che viene restituito al compilatore e reinserito nel normale processo di compilazione. Il \emph{Runtime Support}, esterno al flusso principale di trasformazione, fornisce invece le funzionalità richieste dal codice generato, in particolare per l'esecuzione parallela e la configurazione runtime.
 
 \section{Architettura del compilatore}
@@ -570,9 +569,9 @@ Il flusso complessivo del compilatore può essere visto come un flusso di rappre
 \begin{equation*}
   \text{Scala AST}
   \longrightarrow
-  \text{Ast}_{\mathrm{Raw}}
+  \texttt{Ast}
   \longrightarrow
-  \text{Ast}_{\mathrm{Enriched}}
+  \texttt{AstExt}
   \longrightarrow
   \text{OP IR}
   \longrightarrow
@@ -671,35 +670,51 @@ Tramite le annotazioni \texttt{@implicitNotFound} vengono emessi messaggi di err
 
 \subsection{Operazione terminale \texttt{collect}}
 
-L'operazione \texttt{collect}, definita tramite extension methods, costituisce il punto nel quale la descrizione della pipeline viene trasformata nel codice che ne realizza l'esecuzione.
+L'operazione \texttt{collect}, definita tramite extension methods, costituisce il punto cardine nel quale la descrizione dichiarativa della pipeline viene trasformata staticamente nel codice bytecode imperativo che ne realizza l'esecuzione.
 
-Una pipeline sequenziale può utilizzare genericamente un \texttt{Collector}, mentre una pipeline parallela richiede un \texttt{ParallelCollector}, cioè un collector esaustivo i cui risultati intermedi siano combinabili. Questa distinzione permette al type system di rifiutare staticamente combinazioni non supportate.
-
-Ad esempio:
+Una pipeline sequenziale può utilizzare genericamente un \texttt{Collector}, mentre una pipeline parallela richiede un \texttt{ParallelCollector}, ovvero un collector esaustivo i cui risultati parziali siano combinabili. Questa distinzione permette al type system di rifiutare staticamente combinazioni non supportate:
 
 \begin{lstlisting}[language=Scala]
-stream.parallel().collect(Collector.findFirst) // non valido
+stream.parallel().collect(Collector.findFirst) // rifiutato a compile-time
 stream.parallel().collect(Collector.toArray)   // valido
 \end{lstlisting}
 
-\texttt{findFirst} è infatti \texttt{ShortCircuiting} e non soddisfa i requisiti di \texttt{ParallelCollector}, mentre \texttt{ToArrayCollector[T]} ne è un sottotipo. La gerarchia completa dei collector e delle relative politiche di terminazione è mostrata in Figura~\ref{fig:collectors}.
+\texttt{findFirst} è infatti marcato come \texttt{ShortCircuiting} e non soddisfa i requisiti di \texttt{ParallelCollector}, mentre \texttt{ToArrayCollector[T]} ne è un sottotipo esaustivo. La gerarchia completa dei collector e delle relative politiche di terminazione è illustrata in Figura~\ref{fig:collectors}.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.8\textwidth]{drawio/collector.drawio.pdf}
-  \caption{Gerarchia dei Collector e relative politiche di terminazione. La non standard relazione \texttt{<<bind>>}, rappresenta la specializzazione di un parametro di tipo con un tipo concreto. in questo caso, il parametro \texttt{S} con una specifica \texttt{TerminationPolicy}.}
+  \caption{Gerarchia dei Collector, politiche di terminazione e vincoli di inlining. La relazione \texttt{<<bind>>} rappresenta la specializzazione statica di un parametro di tipo (ad es. \texttt{S} con \texttt{Exhaustive} o \texttt{ShortCircuiting}).}
   \label{fig:collectors}
-\end{figure}
+  \end{figure}
+
+\paragraph{Inlining dei Collector e la modalità \texttt{strictInlining}.}
+Per ridurre le allocazioni e il dispatch dinamico a runtime, la libreria effettua l'inlining delle chiamate ai metodi del collector per default (modalità \texttt{strictInlining = true}). In questo caso il collector fornito a \texttt{collect} deve essere una classe concreta rifiutando classi anonime, classi astratte e trait e le funzioni del collector devono essere obbligatoriamente dichiarate come \texttt{inline def}.
+
+Queste condizioni sono verificate a compile time, durante l'esecuzione della macro. Questa modalità può essere disabilitata tramite \texttt{strictInlining = false}, in questo caso rimarranno le chiamate dinamiche ai metodi del collector.
 
 \subsection{Configurazione compile-time e runtime}
+\label{subsec:configurazione-compile-runtime}
 
-La libreria distingue tra due tipologie di configurazione: \texttt{CompileConfig}, relativa alle scelte che influenzano la generazione del codice, e \texttt{RuntimeConfig}, relativa ai parametri utilizzati durante l'esecuzione.
+La libreria distingue tra due tipologie di configurazione:
 
-Entrambe le configurazioni sono gestite tramite il meccanismo dei \texttt{given} di Scala. La libreria fornisce un comportamento di default, permettendo quindi di utilizzare FusedStream senza alcuna configurazione esplicita nei casi più comuni.
+\paragraph{\texttt{CompileConfig} (Configurazione di compilazione).}
+Determina le strategie di manipolazione dell'AST e le ottimizzazioni applicate dalla macro a compile time:
+\begin{itemize}
+  \item \texttt{useUnsafe}: quando abilitato, sfrutta \texttt{VarHandle} per accedere direttamente al vettore interno di \texttt{java.util.ArrayList}
+  \item \texttt{enableLogging}: abilita il logging dell'esecuzione della macro
+  \item \texttt{strictInlining}: Abilita l'inlining delle chiamata ai collector
+\end{itemize}
 
-Quando necessario, l'utente può comunque sovrascrivere i valori predefiniti fornendo una propria istanza \texttt{given} della configurazione desiderata nel contesto della pipeline.
+\paragraph{\texttt{RuntimeConfig} (Configurazione di esecuzione).}
+Determina i parametri dell'esecuzione:
+\begin{itemize}
+  \item \texttt{executionContext}: il thread pool utilizzato per l'esecuzione parallela
+  \item \texttt{workerCount}: il numero di worker paralleli
+  \item \texttt{chunksPerWorker}: il fattore moltiplicativo la divisione in chunks
+\end{itemize}
 
-In questo modo l'API mantiene una configurazione implicita e poco invasiva, lasciando comunque la possibilità di personalizzare sia il comportamento in fase di compilazione sia quello in fase di esecuzione.
+In assenza di configurazioni esplicite, la libreria fornisce istanze given predefinite, garantendo il minimo attrito nell'uso per le pipeline standard
 
 \subsection{Import semplificato dell'API}
 Tutti gli elementi dell'API pubblica vengono riesposti direttamente attraverso l'oggetto \texttt{FusedStream}. Questo permette di importare l'intera API necessaria con una singola istruzione:
@@ -755,6 +770,31 @@ case Map[P <: Phase, A, B](upstream: StreamTree[P, A],...) extends StreamTree[P,
 
 Si noti come la fase del nodo impone anche la fase del relativo \emph{upstream} garantendo la correttezza dell'intera struttura dati. Gli operatori la cui struttura viene invece effettivamente estesa hanno varianti specifiche per fase.
 
+\subsection{Ast e AstExt}
+\label{subsec:ast-containers}
+
+\texttt{StreamTree} descrive la pipeline, ma le fasi del compilatore devono scambiarsi altre informazioni come strategia terminale e le informazioni statiche della pipeline. \texttt{Ast} e \texttt{AstExt} raccolgono rispettivamente il risultato del parsing e quello dell'enrichment.
+\subsubsection{Ast: il risultato del parsing}
+\texttt{Ast} costituisce il risultato della fase di parsing, è composto da:
+
+\begin{description}
+  \item[\texttt{parsedStream}] L'albero della pipeline in fase \texttt{Raw}.
+  \item[\texttt{collectionStrategy}] La rappresentazione dell'operazione terminale, descritta nella Sezione~\ref{sec:collector_desion}.
+  \item[\texttt{prefixStatements}] Le istruzioni Scala estratte dai blocchi che racchiudono l'espressione della pipeline.
+  \item[\texttt{executionMode}] La modalità \texttt{Sequential} o \texttt{Parallel}, determinata dal punto di ingresso della macro.
+\end{description}
+
+\subsubsection{AstExt: il risultato dell'enrichment}
+\texttt{AstExt} raccoglie le informazioni utilizzate dal generatore della OP IR. E' composto da:
+
+\begin{description}
+  \item[\texttt{enrichedStream}] L'albero in fase \texttt{Enriched}, i cui nodi includono i riferimenti introdotti durante l'enrichment.
+  \item[\texttt{declarations}] Le dichiarazioni generate per materializzare espressioni e inizializzare lo stato della pipeline.
+  \item[\texttt{collectionStrategy}] La strategia terminale arricchita: \texttt{EnrichedCollectionStrategy} conserva la strategia originaria, l'eventuale riferimento booleano \texttt{earlyExitVar} per l'arresto anticipato del collector e la lista \texttt{ref} dei predicati che controllano la prosecuzione dell'elaborazione.
+  \item[\texttt{hasAlignedIndexes}] Indica se la posizione di un elemento nella sorgente può essere usata direttamente come posizione nel risultato.
+  \item[\texttt{cardinality}] Descrive il numero di elementi prodotti come dimensione esatta, limite superiore o quantità sconosciuta. Quando disponibile, la dimensione è rappresentata da un'\texttt{Expr[Int]}.
+\end{description}
+
 \section{Rappresentazione per la Code Generation (OP Ir)}
 \label{sec:op-ir}
 
@@ -765,11 +805,11 @@ Per questo si introduce una seconda rappresentazione intermedia, \emph{Operation
 La rappresentazione è organizzata attorno a due categorie fondamentali: \emph{Values}, che descrivono espressioni che producono un valore, e \emph{Operations}, che descrivono azioni e strutture di controllo. Un programma nella OP IR è una sequenza di operazioni e un valore che ne costituisce il risultato finale.
 
 Questo secondo linguaggio intermedio permette di suddividere la generazione del codice in due fasi con responsabilità distinte. La prima opera sulla rappresentazione logica della pipeline e determina la strategia di esecuzione più adatta esprimendola attraverso la OP IR.
-La seconda fase è invece meccanica: opera su un sulle primitive della OP IR e ne effettua il lowering nei corrispondenti costrutti Scala. Le decisioni relative a come implementare la pipeline sono quindi prese prima della generazione effettiva del codice.
+La seconda fase è invece meccanica: opera sulle primitive della OP IR e ne effettua il lowering nei corrispondenti costrutti Scala. Le decisioni relative a come implementare la pipeline sono quindi prese prima della generazione effettiva del codice.
 
 \subsection{Valori}
 
-I \emph{Values} rappresentano espressioni che producono un risultato e sono utilizzati come operandi dalle operazioni della OP IR. La gerarchia è composta da valori elementari, come costanti o riferimenti a Simboli e da valori composti che descrivono operazioni su altri valori come confronti, operazioni aritmetiche o applicazioni di funzioni.
+I \emph{Values} rappresentano espressioni che producono un risultato e sono utilizzati come operandi dalle operazioni della OP IR. La gerarchia è composta da valori elementari, come costanti o riferimenti a simboli e da valori composti che descrivono operazioni su altri valori come confronti, operazioni aritmetiche o applicazioni di funzioni.
 
 Un \texttt{Value} descrive quindi un'espressione che può essere incorporata all'interno di una \texttt{Op}. Ad esempio, la condizione di un ciclo \texttt{While} è rappresentata come un \texttt{Value[Boolean]}, mentre il valore assegnato da una \texttt{AssignVal} è a sua volta rappresentato tramite un \texttt{Value}. Un esempio parziale della gerarchia è riportato in Figura~\ref{fig:values}.
 
@@ -780,12 +820,11 @@ Un \texttt{Value} descrive quindi un'espressione che può essere incorporata all
   \label{fig:values}
 \end{figure}
 
-Ogni valore possiede l'informazione relativa al tipo che rappresentano, permette quindi di esprimere staticamente i vincoli, a livello di tipi tra le diverse primitive della IR. Per esempio in \texttt{LessThan}, entrambi gli operandi devono essere valori interi, mentre il risultato è necessariamente un \texttt{Value[Boolean]}.
+Ogni valore possiede l'informazione relativa al tipo che rappresenta, permettendo quindi di esprimere staticamente i vincoli a livello di tipi tra le diverse primitive della IR. Per esempio in \texttt{LessThan}, entrambi gli operandi devono essere valori interi, mentre il risultato è necessariamente un \texttt{Value[Boolean]}.
 
-La sola informazione contenuta nel parametro generico non è però sufficiente per la successiva generazione del codice, ogni \texttt{Value[T]} espone quindi anche un \texttt{Type[T]}, attraverso il campo \texttt{valueType}.
+La sola informazione contenuta nel parametro generico non è però sufficiente per la successiva generazione del codice: ogni \texttt{Value[T]} espone quindi anche un \texttt{Type[T]}, attraverso il campo \texttt{valueType}.
 
-Si realizza così una forma di \emph{type capture}: oltre a conoscere staticamente che un nodo produce un valore di tipo \texttt{T}, la IR conserva
-una rappresentazione del tipo utilizzabile dalle Scala Quotes. Per tipi noti in maniera statica, per valori parametrici viene invece propagata attraverso un parametro contestuale \texttt{Type[T]}.
+Si realizza così una forma di \emph{type capture}: oltre a conoscere staticamente che un nodo produce un valore di tipo \texttt{T}, la IR conserva una rappresentazione del tipo utilizzabile dalle Scala Quotes. Per tipi noti in maniera statica o per valori parametrici, tale informazione viene propagata attraverso un parametro contestuale \texttt{Type[T]}.
 
 Come approfondito nella Sezione~\ref{subsec:lowering-type-preservation}, questa informazione viene poi sfruttata durante il lowering per costruire espressioni Scala correttamente tipizzate.
 
@@ -793,33 +832,35 @@ Come approfondito nella Sezione~\ref{subsec:lowering-type-preservation}, questa 
 
 Le \emph{Operations} rappresentano invece le azioni che costituiscono il corpo del programma generato.
 
-La OP IR comprende operazioni elementari per la dichiarazione e l'aggiornamento dello stato, come \texttt{Declare}, \texttt{AssignVal} o \texttt{Inc}. Il controllo del flusso è espresso esplicitamente attraverso \texttt{If} e \texttt{While}.
+La OP IR comprende operazioni elementari per la dichiarazione e l'aggiornamento dello stato, come \texttt{Declare[T]}, \texttt{AssignVal[T]} o \texttt{Inc}. Il controllo del flusso è espresso esplicitamente attraverso \texttt{If} e \texttt{While}. Nel contesto parallelo, il nodo dedicato \texttt{Op.Parallel[OUT]} modella la partizione concorrente del carico e la riduzione finale tramite \texttt{ParallelCombine[OUT]}, svincolando la firma del nodo dal tipo interno del buffer di accumulo.
 
 Sono inoltre presenti operazioni specializzate come ad esempio \texttt{ArrayWrite} che rappresenta la scrittura di un elemento in un array o \texttt{DynamicArrayBuilderAdd} che rappresenta l'inserimento in un buffer.
 
 \section{La collection strategy}
 \label{sec:collector_desion}
 
-La fase terminale di una stream è rappresentata internamente attraverso una \texttt{CollectionStrategy} (Figura~\ref{fig:coll_strat}). Questa astrazione descrive la strategia con cui gli elementi prodotti dalla pipeline devono essere consumati e aggregati per ottenere il risultato finale.
+La fase terminale di una stream è rappresentata internamente attraverso una \texttt{CollectionStrategy[A, R]} (Figura~\ref{fig:coll_strat}). Questa astrazione descrive la strategia con cui gli elementi prodotti dalla pipeline (di tipo \texttt{A}) devono essere consumati e aggregati per ottenere il risultato finale di tipo \texttt{R}. La firma del tratto è volutamente limitata a due parametri di tipo \texttt{[A, R]}, incapsulando il tipo intermedio del buffer \texttt{Buf} esclusivamente all'interno della variante generica \texttt{WithCollector[A, Buf, R]}.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.8\textwidth]{drawio/collectionStrategy.drawio.pdf}
-  \caption{Diagramma UML delle classi per la gerarchia \texttt{CollectionStrategy}. \texttt{Summable} è definito come union type dei tipi numerici \texttt{Int}, \texttt{Long}, \texttt{Float} e \texttt{Double}.}
+  \caption{Diagramma UML delle classi per la gerarchia \texttt{CollectionStrategy[A, R]}. \texttt{Summable} è definito come union type dei tipi numerici \texttt{Int}, \texttt{Long}, \texttt{Float} e \texttt{Double}.}
   \label{fig:coll_strat}
 \end{figure}
 
 I collector possono essere suddivisi in due categorie:
 
-\emph{concrete collectors}, che forniscono direttamente l'implementazione delle operazioni necessarie alla raccolta. Tali operazioni vengono quindi invocate dal codice generato durante l'esecuzione della stream.
+\emph{concrete collectors}, che forniscono direttamente l'implementazione delle operazioni necessarie alla raccolta. Nella modalità di compilazione strict (\texttt{strictInlining = true}) sono richiesti un tipo concreto con nome visibile e metodi dichiarati \texttt{inline def}, così che Scala possa espandere le operazioni del collector direttamente nel ciclo di scansione. Disabilitando \texttt{strictInlining} sono ammesse anche normali invocazioni a runtime con classi anonime, la cui eventuale ottimizzazione è demandata al JIT. Il meccanismo di generazione è descritto nella Sezione~\ref{subsec:collector-inlining}.
 
 \emph{intrinsic collectors}. Questi non costituiscono l'implementazione effettivamente utilizzata a runtime, ma agiscono come placeholder all'interno della DSL. Il compilatore li riconosce durante il parsing e li sostituisce con una \texttt{CollectionStrategy} primitiva, la cui implementazione è definita direttamente all'interno della libreria. Appartengono a questa categoria le operazioni \texttt{toArray} e \texttt{summing}.
+
+La strategia viene infine arricchita in \texttt{EnrichedCollectionStrategy[A, R]}, che combina la strategia selezionata con l'eventuale variabile booleana di arresto anticipato (\texttt{earlyExitVar}) e la lista di predicati di controllo (\texttt{ref}).
 
 \chapter{Implementazione}
 \label{chap:implementazione}
 
 \section{Parsing}
-La fase di parsing ha l'obiettivo di trasformare l'albero sintattico prodotto dal compilatore Scala in una \texttt{StreamIR} (Sezione~\ref{sec:stream-ir}) e di estrarre la \texttt{CollectionStrategy} dal \texttt{Collector}. Il parsing della pipeline e quello dell'operazione terminale sono mantenuti separati e vengono successivamente combinati nella rappresentazione \texttt{Ast} utilizzata dalle fasi successive.
+La fase di parsing ha l'obiettivo di trasformare l'albero sintattico prodotto dal compilatore Scala in una \texttt{StreamIR} (Sezione~\ref{sec:stream-ir}) e di estrarre la \texttt{CollectionStrategy} dal \texttt{Collector}. Il parsing della pipeline e quello dell'operazione terminale sono mantenuti separati e vengono successivamente combinati nel contenitore \texttt{Ast} (Sezione~\ref{subsec:ast-containers}), insieme alle istruzioni preliminari e alla modalità di esecuzione.
 
 \subsection{Parsing della stream}
 \label{sec:parsing}
@@ -911,35 +952,45 @@ $$
 
 Nota la tipizzazione su TerminationPolicy a questo punto viene persa, è infatti utilizzata solo per definire la grammatica della dsl e viene convertita nel valore booleano \texttt{isEarlyStopping} dentro \texttt{WithCollector}
 
-\subsection{Parsing della configurazione statica}
-La libreria effettua un'ulteriore operazione di parsing relativa alla configurazione di compilazione. A differenza del parsing della stream, basato sull'analisi del TASTy, in questo caso l'estrazione viene effettuata mediante quoted pattern matching. Poiché la configurazione deve essere interamente nota a compile time, i valori dei suoi campi devono poter essere estratti staticamente dall'espressione. Sono quindi accettate istanziazioni di \texttt{CompileConfig} i cui argomenti siano costanti note in fase di compilazione, come mostrato dal seguente \texttt{FromExpr}:
+Prima di costruire la strategia generica, se \texttt{strictInlining} è abilitato, il parser esegue due controlli separati rifiutando classi anonime e verifica che le implementazioni di \texttt{supplier}, \texttt{accumulator} e \texttt{finisher} siano marcate con inline.
 
-\begin{lstlisting}[caption={Unapplier con quoted pattern matching per configurazione statica}]
+\noindent\begin{minipage}{\linewidth}
+
+  \subsection{Parsing della configurazione statica}
+  La libreria effettua un'ulteriore operazione di parsing relativa alla configurazione di compilazione. A differenza del parsing della stream, basato sull'analisi del TASTy, in questo caso l'estrazione viene effettuata mediante quoted pattern matching. Poiché la configurazione deve essere interamente nota a compile time, i valori dei suoi campi devono poter essere estratti staticamente dall'espressione. Sono quindi accettate istanziazioni di \texttt{CompileConfig} i cui argomenti siano costanti note in fase di compilazione, come mostrato dal seguente \texttt{FromExpr}:
+
+  \begin{lstlisting}[caption={Unapplier con quoted pattern matching per configurazione statica}]
 given FromExpr[CompileConfig] with {
-  def unapply(expr: Expr[CompileConfig])(using Quotes): Option[CompileConfig] = {
+  def unapply(expr: Expr[CompileConfig])(
+      using Quotes
+  ): Option[CompileConfig] = {
     expr match {
-      // CompileConfig(unsafe, logging)
-      case '{ CompileConfig($u, $l) } =>
+      // CompileConfig(unsafe, logging, strictInlining)
+      case '{ CompileConfig($u, $l, $i) } =>
         for {
           unsafe <- u.value
           logging <- l.value
-        } yield CompileConfig(unsafe, logging)
+          strictInlining <- i.value
+        } yield CompileConfig(unsafe, logging, strictInlining)
 
-      // new CompileConfig(unsafe, logging)
-      case '{ new CompileConfig($u, $l) } =>
+      // new CompileConfig(unsafe, logging, strictInlining)
+      case '{ new CompileConfig($u, $l, $i) } =>
         for {
           unsafe <- u.value
           logging <- l.value
-        } yield CompileConfig(unsafe, logging)
+          strictInlining <- i.value
+        } yield CompileConfig(unsafe, logging, strictInlining)
+      case _ => None
     }
   }
 }
 \end{lstlisting}
+\end{minipage}
 
 \section{Enrichment}
 \label{sec:enrichment}
 
-La rappresentazione prodotta dal parser descrive la struttura logica della pipeline, ma non contiene ancora tutte le informazioni necessarie alla generazione del codice. La fase di \emph{enrichment} completa quindi la \texttt{StreamTree} con informazioni determinate staticamente e utilizzate nelle successive fasi di generazione.
+Il contenitore \texttt{Ast} prodotto dal parser descrive la struttura logica della pipeline, ma non contiene ancora tutte le informazioni necessarie alla generazione del codice. La fase di \emph{enrichment} completa quindi la \texttt{StreamTree} con informazioni determinate staticamente e restituisce un \texttt{AstExt} (Sezione~\ref{subsec:ast-containers}), che raccoglie l'albero arricchito e le informazioni utilizzate nelle successive fasi di generazione.
 
 L'enrichment svolge tre attività principali: genera le istruzioni di materializzazione delle espressioni che devono essere valutate una sola volta, introduce e propaga lo stato e le condizioni necessarie al controllo dell'esecuzione e determina proprietà globali della pipeline, quali la cardinalità del risultato e l'allineamento degli indici.
 
@@ -956,9 +1007,7 @@ non provoca la rivalutazione di \texttt{computeLimit()} a ogni iterazione.
 Lo stesso principio viene applicato alle funzioni utilizzate da operatori come \texttt{map} e \texttt{filter}.
 \subsection{Stato e condizioni di terminazione}
 
-Durante l'enrichment vengono introdotte le informazioni di stato necessarie all'esecuzione degli operatori. Le operazioni \texttt{skip} e \texttt{limit} richiedono ad esempio un contatore che rappresenti la posizione corrente nel punto della pipeline in cui sono applicate.
-
-Nel caso di \texttt{limit}, lo stato ha anche effetto sulla terminazione della pipeline: raggiunto il numero massimo di elementi non è più necessario interrogare la sorgente. La condizione
+Durante l'enrichment vengono introdotte le informazioni di stato necessarie all'esecuzione degli operatori. Le operazioni \texttt{skip} e \texttt{limit} richiedono ad esempio un contatore che rappresenti la posizione corrente nel punto della pipeline in cui sono applicate. Nel caso di \texttt{limit}, lo stato ha anche effetto sulla terminazione della pipeline: raggiunto il numero massimo di elementi non è più necessario interrogare la sorgente. La condizione:
 
 \[
   \texttt{sliceCounter} < \texttt{until}
@@ -966,9 +1015,7 @@ Nel caso di \texttt{limit}, lo stato ha anche effetto sulla terminazione della p
 
 viene quindi aggiunta all'insieme dei predicati di terminazione e propagata verso i nodi a monte.
 
-Lo stesso meccanismo viene utilizzato per i collector \emph{short-circuiting}. Quando la strategia di raccolta consente la terminazione anticipata, viene introdotta una variabile mutabile che rappresenta la possibilità di continuare l'elaborazione. Quando il collector determina che il risultato è completo, tale variabile viene invalidata, causando l'arresto dei cicli interessati.
-
-La condizione di un ciclo generato non è quindi costituita solamente dalla condizione della sorgente, ma dalla sua congiunzione con tutti i predicati propagati:
+Lo stesso meccanismo viene utilizzato per i collector \emph{short-circuiting}. Quando la strategia di raccolta consente la terminazione anticipata, viene introdotta una variabile mutabile che rappresenta la possibilità di continuare l'elaborazione. Quando il collector determina che il risultato è completo, tale variabile viene modificata, causando l'arresto dei cicli interessati. La condizione di un ciclo generato non è quindi costituita solamente dalla condizione della sorgente, ma dalla combinazione con tutti i predicati propagati:
 
 \[
   C_{\mathrm{loop}}
@@ -988,9 +1035,7 @@ L'enrichment determina pertanto il livello di annidamento al quale stato e condi
 
 \subsection{Analisi della cardinalità}
 
-Terminato l'enrichment dell'albero vengono determinate due proprietà utilizzate per selezionare la strategia di generazione: la cardinalità del risultato e l'allineamento degli indici.
-
-La cardinalità è rappresentata mediante:
+Terminato l'enrichment dell'albero vengono determinate due proprietà utilizzate per selezionare la strategia di generazione: la cardinalità del risultato e l'allineamento degli indici. La cardinalità è rappresentata mediante:
 
 \begin{lstlisting}[language=Scala]
 enum Cardinality {
@@ -1000,46 +1045,27 @@ enum Cardinality {
 }
 \end{lstlisting}
 
-Una sorgente indicizzabile, come un array o una \texttt{java.util.List}, possiede cardinalità esatta. Operazioni come \texttt{map} la preservano, mentre \texttt{filter}, potendo eliminare elementi ma non aumentarne il numero, la trasformano in un limite superiore. Sorgenti genericamente iterabili e operazioni come \texttt{flatMap}, per le quali non è possibile determinare staticamente il numero di elementi prodotti, conducono invece a una cardinalità sconosciuta.
+Una sorgente indicizzabile, come un array o una lista, possiede cardinalità esatta. Operazioni come \texttt{map} la preservano, mentre \texttt{filter}, potendo eliminare elementi ma non aumentarne il numero, la trasformano in un limite superiore. Sorgenti genericamente iterabili e operazioni come \texttt{flatMap}, per le quali non è possibile determinare staticamente il numero di elementi prodotti, conducono invece a una cardinalità sconosciuta.
 
-A questa informazione si affianca \texttt{hasAlignedIndexes}, che indica se l'indice dell'elemento nella sorgente può essere utilizzato direttamente come indice del risultato. La proprietà è inizialmente valida per sorgenti indicizzabili ed è preservata da operazioni come \texttt{map} e \texttt{limit}; viene invece invalidata da \texttt{filter}, \texttt{skip} e \texttt{flatMap}, che rompono la corrispondenza tra posizione letta e posizione prodotta.
+A questa informazione si affianca \texttt{hasAlignedIndexes}, ovvero se, in caso di sorgenti indicizzate, l'indice dell'elemento nella sorgente corrisponde all'indice nel risultato. La proprietà è inizialmente valida per sorgenti indicizzabili ed è preservata da operazioni come \texttt{map} e \texttt{limit}; viene invece invalidata da \texttt{filter}, \texttt{skip} e \texttt{flatMap}, che rompono la corrispondenza tra posizione letta e posizione prodotta.
 
 \section{Traduzione in OP IR}
 \label{sec:opir-translation}
 
-Una volta completato l'enrichment, la Stream IR contiene le informazioni necessarie per determinare come la pipeline debba essere generata. La fase successiva traduce quindi la rappresentazione logica della stream nella \emph{Operation IR} (OP IR), introdotta nella Sezione~\ref{sec:op-ir}.
-
-È in questa fase che vengono prese le principali decisioni relative al piano di esecuzione. La strategia generata dipende dall'operazione terminale, dalla modalità sequenziale o parallela, dalla cardinalità della pipeline, dall'allineamento degli indici e dalle caratteristiche della sorgente. Il risultato è un \texttt{Program[T]} composto da operazioni e da un valore finale, nel quale i concetti propri del dominio degli stream sono stati tradotti in dichiarazioni, condizioni, cicli e operazioni sui valori.
-
-La fase di lowering descritta nella Sezione~\ref{sec:lowering} può quindi limitarsi alla traduzione meccanica di tali operazioni verso l'AST Scala.
-
+Una volta completato l'enrichment, la Stream IR contiene le informazioni necessarie per determinare come la pipeline debba essere generata. La fase successiva traduce quindi la rappresentazione logica della stream nella \emph{Operation IR} (OP IR), introdotta nella Sezione~\ref{sec:op-ir}. È in questa fase che vengono prese le principali decisioni relative al piano di esecuzione. La strategia generata dipende infatti dall'operazione terminale, dalla modalità sequenziale o parallela, dalla cardinalità della pipeline, dall'allineamento degli indici e dalle caratteristiche della sorgente. Il risultato è un \texttt{Program} composto da operazioni e da un valore finale, nel quale i concetti propri del dominio degli stream sono stati tradotti in dichiarazioni, condizioni, cicli e operazioni sui valori. La fase di lowering descritta nella Sezione~\ref{sec:lowering} può quindi limitarsi alla traduzione meccanica di tali operazioni verso l'AST Scala.
 
 \subsection{Selezione della strategia terminale}
 
 Il primo livello decisionale riguarda l'operazione terminale. La \texttt{CollectionStrategy} ottenuta durante il parsing distingue tre casi:
 
 \begin{itemize}
-  \item \texttt{ToArray}, per il quale viene selezionata una strategia di
-        materializzazione dipendente dalla cardinalità della pipeline;
-  \item \texttt{Summing}, tradotto in un accumulatore numerico specializzato
-        sul tipo degli elementi;
-  \item \texttt{WithCollector}, che utilizza il protocollo generale
-        \texttt{supplier}/\texttt{accumulator}/\texttt{finisher}.
+  \item \texttt{ToArray}, per il quale viene selezionata una strategia di materializzazione dipendente dalla cardinalità della pipeline;
+  \item \texttt{Summing}, tradotto in un accumulatore numerico specializzato sul tipo degli elementi;
+  \item \texttt{WithCollector}, che utilizza il protocollo generale \texttt{supplier}/\texttt{accumulator}/\texttt{finisher}.
 \end{itemize}
 
 
-\subsection{Materializzazione del risultato}
-
-Il terminale \texttt{toArray} mostra come le informazioni determinate durante l'enrichment influenzino direttamente il piano generato. La strategia dipende principalmente dalla cardinalità e dall'allineamento degli indici. Con cardinalità esatta e indici allineati, come nel caso di una pipeline composta esclusivamente da \texttt{map} su una sorgente indicizzabile, è possibile preallocare l'array finale e utilizzare direttamente l'indice della sorgente.
-
-La stessa proprietà è particolarmente utile in parallelo: poiché la posizione finale di ogni elemento è nota indipendentemente, i worker possono scrivere in regioni distinte dello stesso array mediante \texttt{ParallelCombine.ArrayDirect()}, senza produrre risultati intermedi.
-
-Quando è noto solamente un limite superiore, ad esempio in presenza di \texttt{filter}, viene comunque preallocato un array, ma viene mantenuto un indice di output separato. Al termine l'array viene eventualmente troncato al numero di elementi effettivamente prodotti.
-
-Se invece la cardinalità è sconosciuta, come per una sorgente genericamente iterabile o per \texttt{flatMap}, viene utilizzato un buffer dinamico e l'array viene materializzato solamente al termine dell'elaborazione.
-
-Nel caso parallelo gli stessi principi vengono applicati a ciascun chunk: quando non è possibile scrivere direttamente nell'array finale, ogni partizione produce un risultato locale che viene successivamente combinato.
-
+Nel caso del terminale \texttt{toArray}, per esempio, la strategia dipende principalmente dalla cardinalità e dall'allineamento degli indici. Con cardinalità esatta e indici allineati, è possibile preallocare l'array finale e utilizzare direttamente l'indice della sorgente. La stessa proprietà è particolarmente utile in parallelo: poiché la posizione finale di ogni elemento è nota indipendentemente, i worker possono scrivere in regioni distinte dello stesso array mediante \texttt{ParallelCombine.ArrayDirect()}, senza produrre risultati intermedi. Quando è noto solamente un limite superiore, ad esempio in presenza di \texttt{filter}, viene comunque preallocato un array, ma viene mantenuto un indice di output separato. Al termine l'array viene eventualmente troncato al numero di elementi effettivamente prodotti. Se invece la cardinalità è sconosciuta, come per una sorgente genericamente iterabile o per \texttt{flatMap}, viene utilizzato un buffer dinamico e l'array viene materializzato solamente al termine dell'elaborazione.
 
 \subsection{Generazione della pipeline e delle sorgenti}
 
@@ -1098,10 +1124,7 @@ while (outerCondition) {
 }
 \end{lstlisting}
 
-La ricorsione termina infine quando viene raggiunta la sorgente, che introduce il ciclo effettivo.
-La tipologia concreta della sorgente può determinare ulteriori specializzazioni. Per una \texttt{java.util.List}, ad esempio, viene distinto il caso \texttt{ArrayList}, per il quale l'accesso indicizzato evita la creazione
-dell'iteratore. Se abilitato dalla configurazione di compilazione, è inoltre possibile accedere direttamente all'array interno tramite \texttt{VarHandle}.
-
+La ricorsione termina infine quando viene raggiunta la sorgente, che introduce il ciclo effettivo. La tipologia concreta della sorgente può determinare ulteriori specializzazioni. Per una \texttt{java.util.List}, ad esempio, viene distinto il caso \texttt{ArrayList}, per il quale l'accesso indicizzato evita la creazione dell'iteratore e, se abilitato dalla configurazione di compilazione (useUnsafe), è inoltre possibile accedere direttamente all'array interno tramite \texttt{VarHandle}.
 
 \subsection{Generazione del piano parallelo}
 
@@ -1115,20 +1138,16 @@ Nel caso parallelo, la OP IR raccoglie esplicitamente le informazioni necessarie
   \item il riferimento al risultato finale del calcolo.
 \end{itemize}
 
-
-
 La OP IR non descrive quindi i dettagli del meccanismo di scheduling: rappresenta il parallelismo come operazione di alto livello, lasciando alla successiva fase di lowering la sua traduzione nelle primitive runtime.
 
 \section{Lowering}
 \label{sec:lowering}
 
-La fase di lowering costituisce l'ultimo passaggio del compilatore interno di FusedStream. Dato un \texttt{Program[T]}, produce un'espressione Scala \texttt{Expr[T]}, che viene restituita al compilatore e reinserita nel normale processo di compilazione.
-
-A questo punto le decisioni relative alla strategia di esecuzione sono già state prese: il lowering effettua una traduzione dell'OP IR nei corrispondenti nodi dell'AST Scala. La trasformazione è implementata principalmente attraverso due funzioni: \texttt{lowerOp}, per le operazioni con effetti o controllo del flusso, e \texttt{lowerValue}, per le espressioni che producono un valore.
+La fase di lowering costituisce l'ultimo passaggio del compilatore: dato un \texttt{Program[T]}, produce un'espressione Scala \texttt{Expr[T]}, che viene restituita al compilatore scala. A questo punto le decisioni relative alla strategia di esecuzione sono già state prese: il lowering effettua una traduzione dell'OP IR nei corrispondenti nodi dell'AST Scala. La trasformazione è implementata principalmente attraverso due funzioni: \texttt{lowerOp}, per le operazioni, e \texttt{lowerValue}, per le espressioni che producono un valore.
 
 \subsection{Traduzione dell'OP IR}
 
-La traduzione viene effettuata mediante pattern matching sui nodi dell'OP IR, le operazioni vengono ricondotte ai corrispondenti costrutti dell'AST Scala. Analogamente, i nodi \texttt{Value[T]} vengono tradotti ricorsivamente in \texttt{Expr[T]}. Riferimenti, costanti ed espressioni Scala già disponibili possono essere convertiti direttamente, mentre gli operatori composti richiedono il lowering ricorsivo dei propri operandi. Ad esempio:
+La traduzione viene effettuata mediante pattern matching esaustivo sui nodi dell'OP IR, le operazioni vengono ricondotte ai corrispondenti costrutti dell'AST Scala. Analogamente, i nodi \texttt{Value[T]} vengono tradotti ricorsivamente in \texttt{Expr[T]}. Riferimenti, costanti ed espressioni Scala già disponibili possono essere convertiti direttamente, mentre gli operatori composti richiedono il lowering ricorsivo dei propri operandi. Ad esempio:
 
 \begin{lstlisting}[language=OPIR]
 LessThan(left, right)
@@ -1144,11 +1163,8 @@ viene tradotto in:
 
 Lo stesso procedimento viene applicato alle operazioni logiche, confronti, accessi ad array e alle operazioni sui collector, eliminando progressivamente l'OP IR fino a ottenere esclusivamente nodi appartenenti all'AST Scala.
 
-Un aspetto rilevante di questa trasformazione è la conservazione delle informazioni di tipo.
 \label{subsec:lowering-type-preservation}
-Per costruire un'\texttt{Expr[T]}, scala richiede che sia disponibile un'evidenza \texttt{Type[T]}. Per questo motivo, come descritto nella Sezione~\ref{sec:op-ir}, ciascun \texttt{Value[T]} conserva, oltre al parametro di tipo, anche il corrispondente \texttt{valueType}.
-
-Durante il pattern matching sull'OP IR tale informazione viene recuperata e resa disponibile localmente. Ad esempio, nel lowering di una scrittura su array:
+Questa trasformazione conserva le informazioni di tipo: per costruire un'\texttt{Expr[T]}, scala richiede che sia disponibile un'evidenza \texttt{Type[T]}. Per questo motivo, come descritto nella Sezione~\ref{sec:op-ir}, ciascun \texttt{Value[T]} conserva, oltre al parametro di tipo, anche il \texttt{Type[T]} corrispondente nel campo \texttt{valueType}. Durante il pattern matching sull'OP IR tale informazione viene recuperata e resa disponibile localmente. Ad esempio, nel lowering di una scrittura su array:
 
 \begin{lstlisting}[language=Scala]
 case write: ArrayWrite[t] =>
@@ -1179,11 +1195,21 @@ elem * 2
 
 In questo modo la funzione non deve essere mantenuta come entità invocabile nel codice generato, eliminando il relativo dispatch.
 
+\noindent\begin{minipage}{\linewidth}
+\subsection{Chiamate e inlining dei collector}
+\label{subsec:collector-inlining}
+
+Le operazioni sui collector vengono tradotte generando l'istruzione dell'AST che chiama il metodo associato sull'oggetto collector, ad esempio per l'accumulazione:
+\begin{lstlisting}[language=Scala]
+Select.overloaded(collector.asTerm, "accumulator", Nil, arguments).asExprOf[T]
+\end{lstlisting}
+\end{minipage}
+
+Questo permette al compilatore Scala di fare inlining dei metodi (quando dichiarati inline def). A differenza della $\beta$-reduction utilizzata per \texttt{ApplyFun} in questo caso si lascia l'inlining al compilatore Scala. I factory methods dei collector predefiniti sono \texttt{transparent inline}, così da esporre il tipo delle istanze create.
+
 \subsection{Lowering del parallelismo}
 
-Il nodo \texttt{Parallel} costituisce il caso più articolato del lowering. La fase precedente ha già determinato la strategia di esecuzione e la modalità di combinazione dei risultati; il lowering deve quindi trasformare tale piano nel corrispondente codice concorrente.
-
-Il tipo di \texttt{ParallelCombine} determina l'implementazione specializzata da generare. La libreria prevede tre strategie specializzate e una generica:
+Il nodo \texttt{Parallel} costituisce il caso più articolato del lowering. La fase precedente ha già determinato la strategia di esecuzione e la modalità di combinazione dei risultati; il lowering deve quindi trasformare tale piano nel corrispondente codice concorrente. Il tipo di \texttt{ParallelCombine} determina l'implementazione specializzata da generare. La libreria prevede tre strategie specializzate e una generica:
 
 \begin{itemize}
   \item \texttt{Sum}: combina i risultati parziali mediante somma;
@@ -1205,9 +1231,7 @@ Anche lo scheduling viene definito a runtime sulla base della dimensione della s
 \section{Esempio di traduzione end-to-end}
 \label{sec:end-to-end}
 
-Questa sezione ripercorre passo passo il processo di analisi e generazione del codice effettuato dalla libreria a partire da una semplice pipeline.
-
-L'intero processo segue il flusso dell'applicativo:
+Questa sezione ripercorre passo passo il processo di analisi e generazione del codice effettuato dalla libreria a partire da una semplice pipeline. L'intero processo segue il flusso dell'applicativo:
 
 \[
   \text{Scala AST}
@@ -1341,6 +1365,7 @@ La prima fase consiste nella traduzione dell'AST Scala nella rappresentazione in
   )
 \end{lstlisting}
 
+Per questa pipeline vengono inoltre determinate la strategia terminale \texttt{ToArray[Int]} e la modalità \texttt{Sequential}. Non sono presenti \texttt{prefixStatements}.
 \subsection{L'output dell'enrichment}
 
 La \texttt{StreamIR} del Listato~\ref{lst:end-to-end-parsing} viene quindi sottoposta alla fase di enrichment (Sezione~\ref{sec:enrichment}). La \texttt{Enriched StreamIR} risultante è illustrata nel Listato~\ref{lst:end-to-end-enrichment}:
@@ -1373,8 +1398,8 @@ stream =
 streamInfo =
   StreamProperties(
     // Abbiamo un filter quindi la size non e' esatta ma un upper bound
-    size = UpperBound(ScalaExpr(sourceSize$macro$1)),
-    hasEarlyExit = false
+    cardinality = UpperBound(ScalaExpr(sourceSize$macro$1)),
+    hasAlignedIndexes = false
   )
 \end{lstlisting}
 
@@ -1568,10 +1593,10 @@ Nel corpo del ciclo non sono presenti invocazioni dinamiche verso le funzioni ut
 \section{Testing}
 \label{sec:strategia-testing}
 
-Il testing di una libreria come \texttt{FusedStream} deve affrontare due problemi:
+Il testing deve affrontare due problemi:
 \begin{enumerate}
-  \item \textbf{Correttezza a runtime}: accertarsi che il codice generato dalle macro produca i risultati attesi, rispetti l'ordine degli elementi e preservi la semantica delle normali collezioni Scala.
-  \item \textbf{Verifica a compile-time}: assicurarsi che le combinazioni non valide vengano intercettate subito dal compilatore, fornendo messaggi di errore chiari ed evitando comportamenti anomali o errori oscuri a runtime.
+  \item \textbf{Correttezza a runtime}: accertarsi che il codice generato dalle macro produca i risultati attesi.
+  \item \textbf{Verifica a compile-time}: assicurarsi che le combinazioni non valide vengano intercettate subito dal compilatore, fornendo messaggi di errore chiari.
 \end{enumerate}
 
 I test sono scritti con \texttt{MUnit} e sono organizzati su più livelli separando i controlli interni da quelli sull'API pubblica:
@@ -1587,9 +1612,9 @@ I test sono scritti con \texttt{MUnit} e sono organizzati su più livelli separa
   \item \textbf{Test di compilazione}: verificano che l'uso scorretto dell'API venga bloccato a tempo di compilazione.
 \end{itemize}
 
-\subsubsection{Metriche di copertura}
+\subsubsection{Copertura}
 
-La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul modulo (\texttt{core}), come riassunto in Tabella~\ref{tab:coverage}. La suite raggiunge una copertura complessiva delle istruzioni del \textbf{95.05\%} (1708 su 1797 istruzioni) e una copertura dei rami decisionali del \textbf{94.67\%} (320 su 338 rami).
+La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul modulo principale (\texttt{core}), come riassunto in Tabella~\ref{tab:coverage}. La suite raggiunge una copertura complessiva delle istruzioni del \textbf{91.31\%} (1733 su 1898 istruzioni) e una copertura dei rami decisionali del \textbf{91.67\%}.
 
 \begin{table}[htbp]
   \centering
@@ -1599,14 +1624,14 @@ La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul mod
   \small
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Package / Sottosistema} & \textbf{Istruzioni}  & \textbf{Coverage} & \textbf{Branch coverage} \\
+    \textbf{Package / Sottosistema}            & \textbf{Istruzioni}  & \textbf{Coverage} \\
     \midrule
-    \textsf{fuse.internal.parallel} & 100.00\%             & 100.00\%                                     \\
-    \textsf{fuse.internal.ir}       & 100.00\%             & 100.00\%                                     \\
-    \textsf{fuse.internal}          & 95.19\%              & 92.89\%                                      \\
-    \textsf{fuse} (API pubblica)    & 68.75\%              & 83.33\%                                      \\
+    \textsf{fuse.internal.parallel}            & 282 / 282            & 100.00\%          \\
+    \textsf{fuse.internal}                     & 1336 / 1454          & 91.88\%           \\
+    \textsf{fuse.internal.ir}                  & 86 / 94              & 91.49\%           \\
+    \textsf{fuse} (API pubblica) & 29 / 68              & 42.65\%           \\
     \midrule
-    \textbf{Totale}                 & \textbf{1708 / 1797} & \textbf{95.05\%}  & \textbf{94.67\%}         \\
+    \textbf{Totale (Branch: 91.67\%)}          & \textbf{1733 / 1898} & \textbf{91.31\%}  \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -1618,33 +1643,39 @@ La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul mod
 \subsection{Metodologia}
 \label{subsec:bench-metodologia}
 
-Le misurazioni sono fatte con \emph{Java Microbenchmark Harness}~\cite{jmh}, su OpenJDK 64-Bit (21.0.7-LTS) x86\_64. I risultati sono espressi come tempo medio per operazione (\emph{Average Time}, $\mu\text{s}/\text{op}$).
+Le misurazioni sono state condotte con (JMH)~\cite{jmh}, su OpenJDK 64-Bit (21.0.7-LTS) x86\_64 (Windows). I benchmark sono stati eseguiti con:
+\begin{itemize}
+  \item Heap fissato a 8\,GB sia come dimensione iniziale che massima (\texttt{-Xms8g -Xmx8g}), eliminando pause GC di espansione heap.
+  \item Numero di thread/core attivi è stato vincolato a 4 (\texttt{-XX:ActiveProcessorCount=4}).
+  \item 3 fork indipendenti della JVM, ciascuno preceduto da 5 iterazioni di warm-up da 2 secondi e seguito da 5 iterazioni di misura effettiva da 2 secondi (15 campioni per ciascun punto sperimentale).
+  \item Salvo diversamente specificato, si opera con la configurazione di default (\texttt{useUnsafe = true}). Nella Sezione~\ref{subsec:bench-jit-levels} viene discussa l'incidenza di questo flag.
+\end{itemize}
 
-In particolare, il comportamento della libreria viene comparato con tre implementazioni alternative:
+Il comportamento della libreria viene comparato con tre implementazioni alternative:
 \begin{enumerate}
-  \item \textbf{Java Stream}: le stream della stdlib di Java
-  \item \textbf{Scala View}: le collezioni lazy della stdlib di Scala 3
-  \item \textbf{Loop Java manuale}: Codice java imperativo scritto a mano, rappresenta il codice imperativo tipicamente scritto
+  \item \textbf{Java Stream}: le stream della stdlib di Java (\texttt{java.util.stream}).
+  \item \textbf{Scala View}: le collezioni lazy della stdlib di Scala 3 (\texttt{scala.collection.View}).
+  \item \textbf{Loop Java manuale}: codice imperativo Java classico scritto a mano con ciclo \texttt{while} e accumulatore locale.
 \end{enumerate}
 
 \subsection{Benchmark sequenziali}
 \label{subsec:bench-sequenziali}
 
-Per comprendere le caratteristiche della libreria è fondamentale distinguere tra un microbenchmark sintetico e un carico applicativo reale.
+Per comprendere le caratteristiche della libreria è fondamentale distinguere tra un microbenchmark sintetico e uno più simile carico applicativo reale.
 
 \subsubsection{Scenario Monomorfico}
 \label{subsubsec:bench-monomorfico}
 
-Molti benchmark che hanno come oggetto \emph{Stream} java si limitano a valutare una singola, semplice pipeline (ad esempio \texttt{map} seguita da \texttt{sum}):
+Molti benchmark che hanno come oggetto le stream Java si limitano a valutare una singola, semplice pipeline (ad esempio \texttt{map} seguita da \texttt{sum}):
 $$
   \text{Source} \xrightarrow{\text{map}(t \mapsto t.\text{amount})} \xrightarrow{\text{sum()}} \text{Double}
 $$
-In questo scenario artificiale, il compilatore JIT C2 osserva un unico target (tecnicamente i callsite sono \emph{monomorfici}) e riesce quindi ad applicare l'inlining sia alle lambda sia all'infrastruttura a oggetti di Java Stream.
+In questo scenario artificiale, il compilatore JIT C2 osserva un unico target (i call site sono strettamente \emph{monomorfici}) e riesce quindi ad applicare inlining speculativo e devirtualizzazione sia alle lambda sia all'infrastruttura a oggetti di Java Stream.
 
 Tuttavia, come emerge chiaramente dai dati in Tabella~\ref{tab:bench_mono}, persino in questo contesto ideale Java Stream evidenzia limiti:
 \begin{itemize}
   \item Su collezioni piccole l'inizializzazione della pipeline introduce un costo fisso che rende Java Stream da $6.7$ a oltre $11$ volte più lenta di \texttt{FusedStream} e del loop manuale.
-  \item Su volumi consistenti ($N = 100\,000$), nonostante l'inlining di C2, Java Stream non raggiungere la velocità di codice imperativo classico.
+  \item Su volumi consistenti ($N = 100\,000$), nonostante l'inlining di C2, Java Stream non raggiunge la velocità del codice imperativo classico.
 \end{itemize}
 
 \begin{table}[htbp]
@@ -1655,12 +1686,12 @@ Tuttavia, come emerge chiaramente dai dati in Tabella~\ref{tab:bench_mono}, pers
   \small
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Implementazione}  & \textbf{$N = 10$} & \textbf{$N = 100$} & \textbf{$N = 1\,000$} & \textbf{$N = 100\,000$} \\
+    \textbf{Implementazione}  & \textbf{$N = 10$}          & \textbf{$N = 100$}         & \textbf{$N = 1\,000$}      & \textbf{$N = 100\,000$}     \\
     \midrule
-    \textsf{FusedStream}      & $\mathbf{0.006}$  & $\mathbf{0.067}$   & $\mathbf{0.914}$      & $\mathbf{504.66}$       \\
-    \textsf{Java Manual Loop} & $0.007$           & $0.068$            & $0.918$               & $507.56$                \\
-    \textsf{Scala View}       & $0.042$           & $0.331$            & $3.230$               & $335.44$                \\
-    \textsf{Java Stream}      & $0.068$           & $0.451$            & $4.290$               & $857.71$                \\
+    \textsf{FusedStream}      & $\mathbf{0.006 \pm 0.001}$ & $\mathbf{0.067 \pm 0.001}$ & $\mathbf{0.914 \pm 0.002}$ & $\mathbf{504.66 \pm 11.23}$ \\
+    \textsf{Java Manual Loop} & $0.007 \pm 0.001$          & $0.068 \pm 0.001$          & $0.918 \pm 0.002$          & $507.56 \pm 6.60$           \\
+    \textsf{Scala View}       & $0.042 \pm 0.001$          & $0.331 \pm 0.006$          & $3.230 \pm 0.021$          & $335.44 \pm 3.46$           \\
+    \textsf{Java Stream}      & $0.068 \pm 0.001$          & $0.451 \pm 0.005$          & $4.290 \pm 0.007$          & $857.71 \pm 16.89$          \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -1668,11 +1699,9 @@ Tuttavia, come emerge chiaramente dai dati in Tabella~\ref{tab:bench_mono}, pers
 \subsubsection{Scenario Megamorfico (Carico applicativo reale)}
 \label{subsubsec:bench-megamorfico}
 
-Questo scenario simula un carico applicativo di analisi e reportistica su un database in-memory, eseguendo 8 query distinte su transazioni.
+Questo scenario simula un carico di analisi e reportistica su dati in-memory, eseguendo 8 query eterogenee su dati rappresentanti transazioni finanziarie. Ciascuna delle 8 query è isolata in un metodo statico dedicato (\texttt{@static def}) invocato in sequenza dal metodo di benchmark, garantendo che ogni pipeline venga compilata e ottimizzata in modo modulare dal compilatore JIT.
 
-In Java Stream e Scala View i call site interni delle interfacce funzionali diventano \emph{megamorfici} (più di due classi concrete osservate a runtime). La \emph{cache} collassa, disabilitando l'inlining, la JVM è costretta a eseguire dispatch virtuali ad ogni elemento.
-
-Come riportato in Tabella~\ref{tab:bench_mega}, le prestazioni di \texttt{FusedStream} equivalgono a quelle del codice Java manuale lungo tutti e quattro gli ordini di grandezza analizzati.
+Nelle applicazioni reali, più pipeline distinte invocano operatori con lambda differenti. In Java Stream e Scala View i call site interni delle interfacce funzionali diventano \emph{megamorfici} (più di due classi concrete osservate a runtime). La inline cache della JVM collassa, perdendo inlining speculativo e escape analysis. La JVM è costretta a eseguire dispatch virtuali ad ogni singolo elemento. Come riportato in Tabella~\ref{tab:bench_mega}, le prestazioni di \texttt{FusedStream} equivalgono a quelle del codice Java manuale lungo tutti gli ordini di grandezza analizzati, dimostrando la completa rimozione dell'overhead funzionale tramite inlining a compile-time.
 
 \begin{table}[htbp]
   \centering
@@ -1682,25 +1711,33 @@ Come riportato in Tabella~\ref{tab:bench_mega}, le prestazioni di \texttt{FusedS
   \small
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Implementazione}  & \textbf{$N = 10$} & \textbf{$N = 100$} & \textbf{$N = 1\,000$} & \textbf{$N = 100\,000$} \\
+    \textbf{Implementazione}      & \textbf{$N = 10$}          & \textbf{$N = 100$}         & \textbf{$N = 1\,000$}      & \textbf{$N = 100\,000$}     \\
     \midrule
-    \textsf{FusedStream}      & $\mathbf{0.011}$  & $\mathbf{0.089}$   & $\mathbf{1.485}$      & $\mathbf{799.50}$       \\
-    \textsf{Java Manual Loop} & $0.011$           & $0.083$            & $1.436$               & $758.64$                \\
-    \textsf{Scala View}       & $0.065$           & $0.493$            & $4.815$               & $655.42$                \\
-    \textsf{Java Stream}      & $0.087$           & $0.501$            & $4.631$               & $1261.43$               \\
+    \textsf{FusedStream (Unsafe)} & $\mathbf{0.012 \pm 0.001}$ & $\mathbf{0.087 \pm 0.003}$ & $\mathbf{1.489 \pm 0.146}$ & $\mathbf{131.53 \pm 13.73}$ \\
+    \textsf{FusedStream (Safe)}   & $\mathbf{0.012 \pm 0.001}$ & $\mathbf{0.085 \pm 0.003}$ & $\mathbf{1.278 \pm 0.009}$ & $\mathbf{126.98 \pm 16.58}$ \\
+    \textsf{Java Manual Loop}     & $0.011 \pm 0.001$          & $0.083 \pm 0.001$          & $1.270 \pm 0.005$          & $119.20 \pm 7.06$           \\
+    \textsf{Java Stream}          & $0.089 \pm 0.001$          & $0.504 \pm 0.019$          & $4.649 \pm 0.134$          & $466.33 \pm 2.51$           \\
+    \textsf{Scala View}           & $0.061 \pm 0.001$          & $0.485 \pm 0.006$          & $4.805 \pm 0.121$          & $639.96 \pm 20.52$          \\
     \bottomrule
   \end{tabular}
 \end{table}
 
+\paragraph{Analisi dei risultati.}
+I dati sperimentali riportati in Tabella~\ref{tab:bench_mega} evidenziano le prestazioni delle diverse soluzioni a confronto:
+\begin{enumerate}
+  \item \textbf{Dominio prestazionale su tutte le scale}: sia \texttt{FusedStream} sia il ciclo imperativo Java manuale mostrano tempi di esecuzione equivalenti lungo tutti i valori di $N$. Su collezioni di dimensioni ridotte ($N \le 100$), \texttt{FusedStream} supera Java Stream fino a $\mathbf{7.4\times}$ e Scala View fino a $\mathbf{5.1\times}$, grazie alla completa rimozione a compile-time delle allocazioni di descrittori di stream e iteratori intermedi.
+  \item \textbf{Scalabilità sui grandi volumi}: su collezioni di $100\,000$ elementi, \texttt{FusedStream} risulta $\mathbf{3.5\times}$ più rapido di Java Stream e $\mathbf{4.9\times}$ più rapido di Scala View.
+  \item \textbf{Parità tra accesso sicuro e Unsafe}: il confronto diretto tra \texttt{FusedStream (Unsafe)} e \texttt{FusedStream (Safe)} dimostra che con C2 attivo, il costo di accesso agli elementi della lista viene ottimizzato dal compilatore JIT, rendendo la versione fase analoga.
+\end{enumerate}
+
 \subsection{Benchmark paralleli}
 \label{subsec:bench-paralleli}
 
-La valutazione del runtime parallelo analizza l'efficienza nell'esecuzione delle stesse identiche 8 query usate in precedenza. Vengono messi a confronto:
-
+La valutazione del runtime parallelo analizza l'efficienza nell'esecuzione su un pool di 4 core fisici. Vengono messi a confronto:
 \begin{itemize}
-  \item \texttt{FusedStream.parallel()}: partizionamento statico indicizzato con chunk distribuiti dinamicamente e riduzione diretta dei parziali.
-  \item \texttt{Java parallelStream()}: parallelismo nativo di Java basato su decomposizione ricorsiva con \texttt{Spliterator}.
-  \item \texttt{Java Manual Parallel}: chunking manuale dell'array con accesso indicizzato classico \texttt{ArrayList.get(i)} e sottomissione di task tramite \texttt{invokeAll} su \texttt{ForkJoinPool}.
+  \item \texttt{FusedStream.parallel()}: partizionamento statico indicizzato con chunk distribuiti dinamicamente
+  \item \texttt{Java parallelStream()}: parallelismo nativo di Java basato su decomposizione ricorsiva con \texttt{Spliterator} su \texttt{ForkJoinPool}.
+  \item \texttt{Java Manual Parallel}: chunking manuale dell'array con sottomissione concorrente di task Callable tramite \texttt{invokeAll} su \texttt{ForkJoinPool}.
 \end{itemize}
 
 I risultati sono riassunti in Tabella~\ref{tab:bench_par}.
@@ -1713,133 +1750,87 @@ I risultati sono riassunti in Tabella~\ref{tab:bench_par}.
   \small
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Implementazione}      & \textbf{$N = 10$} & \textbf{$N = 100$} & \textbf{$N = 1\,000$} & \textbf{$N = 100\,000$} \\
+    \textbf{Implementazione}      & \textbf{$N = 10$} & \textbf{$N = 100$} & \textbf{$N = 1\,000$} & \textbf{$N = 100\,000$}     \\
     \midrule
-    \textsf{FusedStream Parallel} & $10.66$           & $13.11$            & $14.32$               & $\mathbf{435.77}$       \\
-    \textsf{Java Manual Parallel} & $11.27$           & $12.72$            & $13.16$               & $617.78$                \\
-    \textsf{Java Parallel Stream} & $3.75$            & $4.90$             & $8.83$                & $1029.31$               \\
+    \textsf{FusedStream Parallel} & $10.66 \pm 0.32$  & $13.11 \pm 0.61$   & $14.32 \pm 0.57$      & $\mathbf{435.77 \pm 12.67}$ \\
+    \textsf{Java Manual Parallel} & $11.27 \pm 0.50$  & $12.72 \pm 0.59$   & $13.16 \pm 0.67$      & $617.78 \pm 13.27$          \\
+    \textsf{Java Parallel Stream} & $3.75 \pm 0.14$   & $4.90 \pm 0.21$    & $8.83 \pm 0.48$       & $1029.31 \pm 16.26$         \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-I dati evidenziano due elementi rilevanti:
+\paragraph{Speedup, efficienza e analisi di scalabilità a 4 core.}
+Dall'analisi comparativa tra il benchmark sequenziale di riferimento a Tier 4 e il benchmark parallelo (Tabella~\ref{tab:bench_par}) sulla taglia massima ($N = 100\,000$), emergono i seguenti indici di scalabilità:
+\begin{itemize}
+  \item \textbf{FusedStream}: tempo sequenziale di riferimento $799.50\,\mu\text{s}$, tempo parallelo $435.77\,\mu\text{s}$. Lo speedup è pari a $\mathbf{1.83\times}$, corrispondente a un'efficienza parallela del $\mathbf{45.8\%}$ (rispetto all'accelerazione ideale di $4\times$ sui 4 core).
+  \item \textbf{Java Manual Parallel}: tempo sequenziale di riferimento $758.64\,\mu\text{s}$, tempo parallelo $617.78\,\mu\text{s}$. Speedup pari a $\mathbf{1.23\times}$, con un'efficienza del $\mathbf{30.7\%}$.
+  \item \textbf{Java Parallel Stream}: tempo sequenziale di riferimento $1261.43\,\mu\text{s}$, tempo parallelo $1029.31\,\mu\text{s}$. Speedup pari a $\mathbf{1.23\times}$, con un'efficienza del $\mathbf{30.6\%}$.
+\end{itemize}
+
+I risultati offrono chiarimenti cruciali sulle dinamiche della concorrenza su JVM:
 \begin{enumerate}
-  \item Su collezioni grandi ($N = 100\,000$), \texttt{FusedStream.parallel()} domina nettamente lo scenario multi-core, risultando $2.36$ volte più veloce di Java Parallel Stream ($1029.31\,\mu\text{s}$) e $1.42$ volte più veloce del loop parallelo manuale.
-  \item Su insiemi ridotti ($N \le 1\,000$), l'esecuzione parallela è sensibilmente più lenta di quella sequenziale a causa dei costi di sincronizzazione.
-  \item Un aspetto interessante è la maggiore efficienza di Java Parallel Stream per dimensioni contenute ($N \le 1\,000$). Questa differenza è dovuta principalmente all'utilizzo di primitive a basso livello (\texttt{ForkJoinPool}), che riducono i context switch rispetto all' \texttt{ExecutionContext} generico sincronizzato tramite \texttt{CountDownLatch}. \end{enumerate}
+  \item \textbf{Perché Java Parallel Stream scala poco ($1.23\times$)}: Java Parallel Stream divide ricorsivamente il flusso tramite \texttt{Spliterator}, allocando oggetti \texttt{ForkJoinTask} e introducendo continuo overhead di work-stealing. Poiché l'elaborazione di $100\,000$ elementi richiede solo circa $1\,\text{ms}$, il costo di allocazione dei task e coordinamento tra i thread rivaleggia con il tempo effettivo di calcolo.
+  \item \textbf{Perché FusedStream non supera il 46\% di efficienza}: benché \texttt{FusedStream.parallel()} superi Java Parallel Stream di ben $2.36\times$ grazie al chunking statico lineare senza allocazioni nel loop, l'efficienza teorica del 100\% non è raggiungibile per due fattori determinanti:
+        \begin{itemize}
+          \item \emph{Memory Bandwidth Wall}: l'iterazione parallela di 4 thread su $100\,000$ riferimenti ad oggetti e la scansione dei campi in memoria satura la banda passante del bus verso la RAM e genera traffico di coerenza nella cache L3 condivisa. Il calcolo (filtro su interi e somma di double) è estremamente leggero rispetto al costo di recupero dei dati dalla memoria principale, ricadendo nei limiti imposti dalla Legge di Amdahl per carichi memory-bound.
+          \item \emph{Overhead di dispatch e riduzione finale}: la sottomissione dei chunk all'\texttt{ExecutionContext}, l'attesa su \texttt{CountDownLatch} e la successiva riduzione sequenziale ordinata dei risultati parziali rappresentano una frazione seriale non azzerabile.
+        \end{itemize}
+  \item \textbf{Comportamento su taglie ridotte ($N \le 1\,000$)}: per taglie contenute la parallelizzazione è sistematicamente controproducente ($10$--$14\,\mu\text{s}$ contro $0.01$--$1.4\,\mu\text{s}$ del sequenziale), dimostrando come l'attivazione del multi-threading debba essere riservata a dataset estesi. Su tali taglie minime, Java Parallel Stream risulta marginalmente più rapido per via dell'integrazione diretta con primitive di basso livello di \texttt{ForkJoinPool}, che riducono i context switch rispetto a un \texttt{ExecutionContext} generico sincronizzato via \texttt{CountDownLatch}.
+\end{enumerate}
 
 \subsection{Comportamento a freddo e livelli di compilazione JIT}
 \label{subsec:bench-jit-levels}
 
 Nelle applicazioni moderne (funzioni serverless o microservizi), le prestazioni durante l'avvio a freddo e i primi cicli di esecuzione sono rilevanti per contenere la latenza iniziale (\emph{cold start}).
 
-HotSpot adotta un'architettura di compilazione a livelli (\emph{Tiered Compilation}):
+L'architettura di compilazione HotSpot (\emph{Tiered Compilation}) prevede cinque livelli di esecuzione, controllabili tramite il flag JVM \texttt{-XX:TieredStopAtLevel=\$tier}:
 \begin{itemize}
-  \item \textbf{Tier 0 (Interprete puro)}: interpretazione pura del bytecode JVM istruzione per istruzione
-  \item \textbf{Tier 1 (C1, no profiling)}: compilazione immediata con il compilatore Client C1
-  \item \textbf{Tier 2 (C1, basic profiling)}: compilazione C1 con contatori di invocazione e branch
-  \item \textbf{Tier 3 (C1, full profiling)}: compilazione C1 con profilazione
-  \item \textbf{Tier 4 (C2, Server)}: compilazione al massimo livello con inlining speculativo, escape analysis ecc.
+  \item \textbf{Tier 0}: interpretazione pura del bytecode JVM istruzione per istruzione.
+  \item \textbf{Tier 1}: compilazione nativa immediata tramite il compilatore Client C1 senza profilazione (\texttt{-XX:TieredStopAtLevel=1}).
+  \item \textbf{Tier 2 e Tier 3}: compilazione C1 con profilazione di base e completa (contatori di invocazione e branch).
+  \item \textbf{Tier 4}: compilazione Server C2 con inlining speculativo, escape analysis e vettorizzazione SIMD (\texttt{-XX:TieredStopAtLevel=4}).
 \end{itemize}
 
-La Tabella~\ref{tab:bench_tiers} riporta i tempi medi di esecuzione sui tre livelli (interpretato, C1, C2) di compilazione nello scenario Megamorfico sequenziale.
+I livelli Tier 2 e Tier 3 rappresentano fasi di transizione in cui la JVM raccoglie profili prima della promozione a C2. Per questa ragione, la Tabella~\ref{tab:bench_tiers} confronta i tre livelli fondamentali: l'interprete puro (Tier 0), il compilatore C1 (Tier 1) e il compilatore C2 (Tier 4), tutti vincolati a 4 core 8\,GB di heap.
 
 \begin{table}[htbp]
   \centering
-  \caption{Confronto prestazioni sui livelli JIT nello scenario Megamorfico}
+  \caption{Confronto prestazioni sui livelli JIT nello scenario Megamorfico ($\mu\text{s}/\text{op}$).}
   \label{tab:bench_tiers}
   \vspace{2mm}
   \small
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Configurazione JIT} & \textbf{FusedStream} & \textbf{Java Manual}   & \textbf{Java Stream}     & \textbf{Scala View}      \\
+    \textbf{Configurazione JIT} & \textbf{FusedStream}          & \textbf{Java Manual}  & \textbf{Java Stream}  & \textbf{Scala View}   \\
     \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 10$:}}                                                                                     \\
-    Tier 0 (Interprete puro)    & $\mathbf{0.901}$     & $1.240$ ($1.4\times$)  & $4.839$ ($5.4\times$)    & $14.519$ ($16.1\times$)  \\
-    Tier 1 (C1)                 & $\mathbf{0.041}$     & $0.037$                & $0.331$ ($8.1\times$)    & $0.544$ ($13.3\times$)   \\
-    Tier 4 (C2 completo)        & $\mathbf{0.011}$     & $0.011$                & $0.087$ ($7.9\times$)    & $0.065$ ($5.9\times$)    \\
+    \multicolumn{5}{l}{\textit{Taglia $N = 10$:}}                                                                                       \\
+    Tier 0 (Interprete puro)    & $\mathbf{0.901 \pm 0.013}$    & $1.240 \pm 0.049$     & $4.839 \pm 0.057$     & $14.519 \pm 0.806$    \\
+    Tier 1 (C1)                 & $\mathbf{0.041 \pm 0.001}$    & $0.037 \pm 0.001$     & $0.331 \pm 0.003$     & $0.544 \pm 0.005$     \\
+    Tier 4 (C2 completo)        & $\mathbf{0.012 \pm 0.001}$    & $0.011 \pm 0.001$     & $0.089 \pm 0.001$     & $0.061 \pm 0.001$     \\
     \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 100$:}}                                                                                    \\
-    Tier 0 (Interprete puro)    & $\mathbf{5.561}$     & $11.179$ ($2.0\times$) & $16.342$ ($2.9\times$)   & $47.982$ ($8.6\times$)   \\
-    Tier 1 (C1)                 & $\mathbf{0.371}$     & $0.383$                & $1.159$ ($3.1\times$)    & $2.223$ ($6.0\times$)    \\
-    Tier 4 (C2)                 & $\mathbf{0.089}$     & $0.083$                & $0.501$ ($5.6\times$)    & $0.493$ ($5.5\times$)    \\
+    \multicolumn{5}{l}{\textit{Taglia $N = 100$:}}                                                                                      \\
+    Tier 0 (Interprete puro)    & $\mathbf{5.561 \pm 0.096}$    & $11.179 \pm 0.653$    & $16.342 \pm 0.599$    & $47.982 \pm 0.952$    \\
+    Tier 1 (C1)                 & $\mathbf{0.371 \pm 0.005}$    & $0.383 \pm 0.001$     & $1.159 \pm 0.005$     & $2.223 \pm 0.062$     \\
+    Tier 4 (C2)                 & $\mathbf{0.087 \pm 0.003}$    & $0.083 \pm 0.001$     & $0.504 \pm 0.019$     & $0.485 \pm 0.006$     \\
     \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 1\,000$:}}                                                                                 \\
-    Tier 0 (Interprete puro)    & $\mathbf{52.12}$     & $110.64$ ($2.1\times$) & $125.72$ ($2.4\times$)   & $374.04$ ($7.2\times$)   \\
-    Tier 1 (C1)                 & $\mathbf{3.68}$      & $3.88$                 & $8.71$ ($2.4\times$)     & $18.29$ ($5.0\times$)    \\
-    Tier 4 (C2)                 & $\mathbf{1.49}$      & $1.44$                 & $4.63$ ($3.1\times$)     & $4.82$ ($3.2\times$)     \\
+    \multicolumn{5}{l}{\textit{Taglia $N = 1\,000$:}}                                                                                   \\
+    Tier 0 (Interprete puro)    & $\mathbf{52.12 \pm 0.39}$     & $110.64 \pm 3.93$     & $125.72 \pm 2.81$     & $374.04 \pm 10.85$    \\
+    Tier 1 (C1)                 & $\mathbf{3.68 \pm 0.11}$      & $3.88 \pm 0.02$       & $8.71 \pm 0.03$       & $18.29 \pm 0.07$      \\
+    Tier 4 (C2)                 & $\mathbf{1.49 \pm 0.15}$      & $1.27 \pm 0.005$      & $4.65 \pm 0.134$      & $4.81 \pm 0.121$      \\
     \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 100\,000$:}}                                                                               \\
-    Tier 0 (Interprete puro)    & $\mathbf{5571.19}$   & $11540.42$             & $12488.01$               & $37431.55$               \\
-    Tier 1 (C1)                 & $\mathbf{1172.27}$   & $1239.64$              & $1575.74$ ($1.34\times$) & $1851.88$ ($1.58\times$) \\
-    Tier 4 (C2)                 & $\mathbf{799.50}$    & $758.64$               & $1261.43$ ($1.58\times$) & $655.42$ ($0.82\times$)  \\
+    \multicolumn{5}{l}{\textit{Taglia $N = 100\,000$:}}                                                                                 \\
+    Tier 0 (Interprete puro)    & $\mathbf{5571.19 \pm 191.09}$ & $11540.42 \pm 226.61$ & $12488.01 \pm 415.40$ & $37431.55 \pm 700.42$ \\
+    Tier 1 (C1)                 & $\mathbf{1172.27 \pm 21.24}$  & $1239.64 \pm 14.59$   & $1575.74 \pm 13.49$   & $1851.88 \pm 45.52$   \\
+    Tier 4 (C2)                 & $\mathbf{131.53 \pm 13.73}$   & $119.20 \pm 7.06$     & $466.33 \pm 2.51$     & $639.96 \pm 20.52$    \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 I risultati sperimentali mettono in luce considerazioni teoriche e pratiche fondamentali:
 \begin{enumerate}
-  \item \textbf{Efficienza a Tier 0 (Interprete puro)}: in modalità interpretata, \texttt{FusedStream} risulta oltre $2$ volte più veloce perfino del ciclo Java manuale ($52.12\,\mu\text{s}$ contro $110.64\,\mu\text{s}$ su $N = 1\,000$, e $5.57\,\text{ms}$ contro $11.54\,\text{ms}$ su $N = 100\,000$). Nel loop Java manuale ogni iterazione esegue una chiamata virtuale interpretata (\texttt{list.get(i)} con \texttt{invokevirtual}), mentre \texttt{FusedStream} accede direttamente all'array sottostante (\texttt{ArrayListAccessor}) tramite istruzioni \texttt{aaload} dirette. Rispetto a Java Stream ($125.72\,\mu\text{s}$) e Scala View ($374.04\,\mu\text{s}$), \texttt{FusedStream} è fino a $7.2$ volte più rapido, dimostrando l'efficacia dell'inlining a compile-time anche in totale assenza di compilazione JIT.
-  \item \textbf{Efficienza immediata a Tier 1}: anche quando il JIT C2 è disabilitato e il compilatore C1 non esegue profilazione né ottimizzazioni complesse (Tier 1), \texttt{FusedStream} genera codice con prestazioni sovrapponibili al ciclo Java manuale ($3.68\,\mu\text{s}$ contro $3.88\,\mu\text{s}$ per $N = 1\,000$). Al contrario, Java Stream e Scala View registrano tempi di esecuzione da $2.4\times$ a $5\times$ superiori, poiché dipendono strettamente da C2 per tentare di eliminare l'overhead degli oggetti intermedi e delle lambda.
-  \item \textbf{Azzeramento del warm-up}: poiché la fusione, la beta-reduction e l'eliminazione delle closure avvengono a tempo di compilazione tramite macro Scala 3, il bytecode emesso possiede già la forma ideale di un ciclo imperativo sequenziale. \texttt{FusedStream} non richiede quindi una fase di riscaldamento (\emph{warm-up}) della JVM per eliminare le astrazioni funzionali, garantendo fin dal primo avvio prestazioni consistenti e deterministiche.
-\end{enumerate}
-
-\subsection{Impatto delle closure: il caso delle Capturing Lambdas}
-\label{subsec:bench-capturing}
-
-Nei microbenchmark sintetici le funzioni lambda impiegate sono tipicamente \emph{non-capturing}, ovvero non fanno riferimento a variabili esterne allo scope locale della funzione stessa (come nel caso di una costante \texttt{t => t.amount > 50.0}). In questa situazione la JVM sfrutta l'infrastruttura di \texttt{LambdaMetafactory} per generare un unico singleton statico all'avvio, riutilizzandolo in ogni successiva invocazione ed eludendo qualsiasi costo di allocazione.
-
-Nelle applicazioni reali i carichi di lavoro sono tuttavia parametrizzati: soglie di prezzo, scaglioni di sconto, aliquote IVA e identificatori utente variano dinamicamente e vengono letti dallo stato dell'applicazione o ricevuti come argomenti. In questi casi la funzione lambda diventa a tutti gli effetti una \textbf{capturing lambda} (o \emph{closure}), poiché deve incorporare lo stato dell'ambiente lessicale circostante.
-
-L'impatto sul runtime JVM è drastico:
-\begin{itemize}
-  \item In Java Stream e Scala View la JVM non può riciclare un'istanza condivisa: a ogni singola esecuzione della query deve allocare sullo heap un nuovo oggetto closure contenente i campi per le variabili catturate;
-  \item A Tier 0 (Interprete puro) e Tier 1 (C1), dove l'analisi di escape non è attiva, ogni invocazione genera allocazioni incontrollate nello spazio Eden e chiamate virtuali tramite \texttt{invokevirtual};
-  \item Persino a Tier 4 (C2 completo), all'interno di un'applicazione reale con molteplici query eterogenee (call site megamorfici), l'ottimizzatore JIT non riesce a eliminare l'allocazione delle closure tramite \emph{Escape Analysis}, penalizzando il throughput e innescando frequenti cicli di garbage collection.
-\end{itemize}
-
-Al contrario, l'approccio di \texttt{FusedStream} azzera alla radice il problema. La macro espande il corpo della lambda mediante \emph{beta-reduction} direttamente all'interno dell'AST del ciclo \texttt{while}: le variabili esterne catturate non richiedono alcun oggetto wrapper di supporto, ma vengono lette come semplici variabili locali già allocate sullo stack frame.
-
-Per quantificare sperimentalmente questo fenomeno, le 8 query eterogenee dello scenario megamorfico sono state rieseguite trasformando tutte le costanti in variabili catturate dall'ambiente locale circostante. La Tabella~\ref{tab:bench_capturing} riporta i tempi medi di esecuzione a confronto sui tre livelli di compilazione JIT (Tier 0, Tier 1 e Tier 4).
-
-\begin{table}[htbp]
-  \centering
-  \caption{Confronto prestazioni con Capturing Lambdas sui livelli JIT ($\mu\text{s}/\text{op}$).}
-  \label{tab:bench_capturing}
-  \vspace{2mm}
-  \small
-  \begin{tabular}{lcccc}
-    \toprule
-    \textbf{Configurazione JIT} & \textbf{FusedStream} & \textbf{Java Manual}    & \textbf{Java Stream}      & \textbf{Scala View}       \\
-    \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 10$:}}                                                                                        \\
-    Tier 0 (Interprete puro)    & $\mathbf{1.006}$     & $1.164$ ($1.16\times$)  & $6.907$ ($6.87\times$)    & $15.922$ ($15.83\times$)  \\
-    Tier 1 (C1)                 & $\mathbf{0.043}$     & $0.038$                 & $0.464$ ($10.79\times$)   & $0.667$ ($15.51\times$)   \\
-    Tier 4 (C2 completo)        & $\mathbf{0.011}$     & $0.010$                 & $0.110$ ($10.00\times$)   & $0.089$ ($8.09\times$)    \\
-    \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 100$:}}                                                                                       \\
-    Tier 0 (Interprete puro)    & $\mathbf{5.700}$     & $10.399$ ($1.82\times$) & $18.345$ ($3.22\times$)   & $50.282$ ($8.82\times$)   \\
-    Tier 1 (C1)                 & $\mathbf{0.381}$     & $0.373$                 & $1.228$ ($3.22\times$)    & $2.307$ ($6.05\times$)    \\
-    Tier 4 (C2)                 & $\mathbf{0.098}$     & $0.085$                 & $0.574$ ($5.86\times$)    & $0.640$ ($6.53\times$)    \\
-    \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 1\,000$:}}                                                                                    \\
-    Tier 0 (Interprete puro)    & $\mathbf{52.62}$     & $104.47$ ($1.99\times$) & $128.04$ ($2.43\times$)   & $379.70$ ($7.22\times$)   \\
-    Tier 1 (C1)                 & $\mathbf{3.83}$      & $3.77$                  & $9.25$ ($2.41\times$)     & $18.49$ ($4.83\times$)    \\
-    Tier 4 (C2)                 & $\mathbf{1.66}$      & $1.54$                  & $5.36$ ($3.23\times$)     & $5.92$ ($3.56\times$)     \\
-    \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 100\,000$:}}                                                                                  \\
-    Tier 0 (Interprete puro)    & $\mathbf{5905.34}$   & $10822.35$              & $12829.36$ ($2.17\times$) & $38404.56$ ($6.50\times$) \\
-    Tier 1 (C1)                 & $\mathbf{1236.95}$   & $1268.68$               & $1681.90$ ($1.36\times$)  & $1826.99$ ($1.48\times$)  \\
-    Tier 4 (C2)                 & $\mathbf{923.07}$    & $978.49$                & $1382.83$ ($1.50\times$)  & $721.10$ ($0.78\times$)   \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-I dati evidenziano tre aspetti fondamentali:
-\begin{enumerate}
-  \item \textbf{Decadimento prestazionale di Java Stream e Scala View}: rispetto alla versione non-capturing (Tabella~\ref{tab:bench_tiers}), Java Stream subisce un incremento sensibile dei tempi su tutti i livelli JIT. Su $N = 10$, dove il calcolo sui dati è minimo e l'allocazione delle closure ha il massimo peso relativo, il tempo medio di Java Stream aumenta del \textbf{$+42.7\%$} a Tier 0 (da $4.84\,\mu\text{s}$ a $6.91\,\mu\text{s}$), del \textbf{$+40.2\%$} a Tier 1 (da $0.331\,\mu\text{s}$ a $0.464\,\mu\text{s}$) e del \textbf{$+26.4\%$} a Tier 4 (da $0.087\,\mu\text{s}$ a $0.110\,\mu\text{s}$). Persino su grandi volumi ($N = 100\,000$), Java Stream rallenta di quasi il $10\%$ a Tier 4 (da $1261.43\,\mu\text{s}$ a $1382.83\,\mu\text{s}$), attestandosi a un distacco di $10\times$ rispetto a \texttt{FusedStream} sui piccoli campioni e di $1.5\times$ sulle grandi taglie.
-  \item \textbf{Totale immunità di \texttt{FusedStream}}: i tempi misurati per \texttt{FusedStream} con capturing lambdas sono identici a quelli ottenuti con lambdas non-capturing (Tabella~\ref{tab:bench_tiers}). Poiché la compilazione tramite macro fonde direttamente i predicati nel corpo del ciclo, l'accesso a variabili esterne viene compilato come accesso diretto a variabili locali sullo stack. Non viene allocato alcun oggetto closure, annullando sul nascere l'overhead a runtime.
-  \item \textbf{Solidità a Tier 0}: in modalità interpretata pura (Tier 0), \texttt{FusedStream} mantiene il suo netto vantaggio, risultando da $6.8\times$ a $15.8\times$ più veloce delle librerie standard sulle piccole taglie, e quasi $2$ volte più veloce del loop Java manuale sui grandi volumi ($5.91\,\text{ms}$ contro $10.82\,\text{ms}$) per via dell'accesso vettoriale diretto alla memoria (\texttt{aaload}).
+  \item \textbf{Efficienza a Tier 0 e parità di accesso a \texttt{ArrayList}}: in modalità interpretata pura (Tier 0), \texttt{FusedStream} risulta oltre $2$ volte più veloce perfino del ciclo Java manuale ($52.12\,\mu\text{s}$ contro $110.64\,\mu\text{s}$ su $N = 1\,000$, e $5.57\,\text{ms}$ contro $11.54\,\text{ms}$ su $N = 100\,000$). L'origine di questo divario risiede nella tecnica di accesso a \texttt{ArrayList}: con la configurazione di default \texttt{useUnsafe = true} (che sfrutta il flag \texttt{--add-opens}), \texttt{FusedStream} accede direttamente al vettore \texttt{elementData} tramite istruzioni bytecode \texttt{aaload}, azzerando i controlli di bounds. Nel loop Java manuale, invece, ogni elemento viene recuperato invocando \texttt{list.get(i)} con un'istruzione \texttt{invokevirtual}, che in modalità interpretata comporta un pesante overhead di call-frame e controllo dei limiti. Disabilitando l'accesso non sicuro con \texttt{useUnsafe = false}, \texttt{FusedStream} emette a sua volta chiamate \texttt{list.get(i)}, allineandosi perfettamente alle prestazioni del ciclo manuale.
+  \item \textbf{Prestazioni immediate a Tier 1}: non appena il compilatore C1 interviene (Tier 1), anche senza profilazione né analisi di inlining avanzata, \texttt{FusedStream} raggiunge immediatamente prestazioni equivalenti al ciclo Java manuale ($3.68\,\mu\text{s}$ contro $3.88\,\mu\text{s}$ su $N = 1\,000$). Al contrario, Java Stream e Scala View sono da $2.4\times$ a $5\times$ più lente, confermando la loro dipendenza critica dalle ottimizzazioni speculative di C2.
+  \item \textbf{Comportamento di warm-up e azzeramento del debito funzionale}: il passaggio da Tier 0 a Tier 4 registra un'accelerazione di diversi ordini di grandezza per tutte le implementazioni (da $5.57\,\text{ms}$ a $0.13\,\text{ms}$ per \texttt{FusedStream}), riflettendo il fisiologico guadagno derivante dalla traduzione in codice macchina nativo e dall'allocazione nei registri CPU. Tuttavia, ciò che \texttt{FusedStream} azzera completamente è il \emph{warm-up funzionale}: poiché il bytecode generato alla compilazione è già nella forma canonica di un ciclo imperativo privo di iteratori intermedi e closure, la JVM non deve attraversare cicli di de-ottimizzazione, né attendere che C2 tenti speculativamente di monomorfizzare call site megamorfici o di eliminare wrapper tramite Escape Analysis. Fin dal primo ciclo interpretato, \texttt{FusedStream} esibisce la stessa semantica esecutiva di un loop a basso livello.
 \end{enumerate}
 
 \subsection{Allocazioni e comportamento del Garbage Collector}
@@ -1847,23 +1838,22 @@ I dati evidenziano tre aspetti fondamentali:
 
 Oltre al throughput, un fattore critico per le prestazioni stabili in produzione è l'impatto sul Garbage Collector (GC). Le librerie funzionali convenzionali producono un flusso continuo di oggetti a vita breve:
 \begin{itemize}
-  \item \textbf{Istanze di closure}: come mostrato nella Sezione~\ref{subsec:bench-capturing}, ogni lambda che cattura variabili dall'ambiente circostante alloca una nuova istanza sullo heap a ogni iterazione o invocazione della pipeline.
-  \item \textbf{Descrittori di pipeline}: ogni stadio intermedio (\texttt{map}, \texttt{filter}) in Java Stream alloca un nodo \texttt{ReferencePipeline} e le relative classi interne di \texttt{Sink}.
-  \item \textbf{Boxing di primitivi}: in assenza di tipi specializzati (\texttt{DoubleStream}), ogni valore transita attraverso wrapper ad oggetti (\texttt{Double}).
+  \item \textbf{Istanze di closure e lambda}: se le funzioni catturano variabili dall'ambiente circostante, la JVM è costretta ad allocare un'istanza sullo heap ad ogni valutazione della query.
+  \item \textbf{Descrittori di pipeline}: ogni stadio intermedio (\texttt{map}, \texttt{filter}) in Java Stream alloca un nodo \texttt{ReferencePipeline} e le relative classi interne.
+  \item \textbf{Boxing di primitivi}: in assenza di stream primitivi specializzati ogni valore transita attraverso oggetti wrapper.
   \item \textbf{Wrapper di iteratori}: in Scala View ogni operatore crea un nuovo oggetto \texttt{Iterator} anonimo che incapsula l'iteratore a monte.
 \end{itemize}
 
-Questo ricambio continuo carica la regione \emph{Eden} della Young Generation, inducendo frequenti cicli di \emph{Minor GC} e fluttuazioni nella latenza di risposta.
+Questo induce frequenti cicli di garbage collection e fluttuazioni nella latenza di risposta.
 
-\texttt{FusedStream} adotta una strategia a \textbf{zero allocazioni nello stato stazionario}:
+\texttt{FusedStream} riduce le allocazioni introdotte dalla rappresentazione e dalla composizione della pipeline:
 \begin{itemize}
   \item Il ciclo di attraversamento è un costrutto nativo \texttt{while} senza iteratori intermedi;
-  \item I valori trasformati transitano come registri locali sullo stack JVM;
-  \item I collector primitivi (come \texttt{summing}) accumulano su variabili primitive (\texttt{double}, \texttt{int}), eliminando completamente il boxing;
-  \item L'accesso a \texttt{ArrayList} estrae gli elementi direttamente dall'array sottostante tramite \texttt{ArrayListAccessor}.
+  \item I valori trasformati vengono mantenuti in variabili locali, facilmente eliminate dal JIT compiler;
+  \item I collector primitivi dedicati (come \texttt{summing}) accumulano direttamente su variabili primitive scalari (\texttt{double}, \texttt{int}), eliminando totalmente il boxing;
 \end{itemize}
 
-Durante l'esecuzione di una pipeline sequenziale, \texttt{FusedStream} non alloca memoria nello heap, assicurando tempi deterministici e totale assenza di pause introdotte dal Garbage Collector.
+Per pipeline a tipi generici su collezioni a oggetti o per collector personalizzati non specializzati su tipi primitivi, le allocazioni di boxing e memorizzazione a runtime seguono la semantica standard del sistema dei tipi della JVM.
 
 \chapter{Retrospettiva}
 \label{chap:retrospettiva}
@@ -1876,9 +1866,12 @@ In questo capitolo vengono riassunte le considerazioni emerse durante lo svilupp
 La progettazione di un motore di fusione a compile-time su JVM impone un bilanciamento continuo tra espressività dell'API, complessità delle macro e prestazioni del codice generato. Le principali scelte di compromesso hanno riguardato:
 
 \begin{itemize}
-  \item \textbf{Modello push ed esclusione dello \texttt{zip}}: l'adozione dell'approccio push ha permesso di eliminare ogni iteratore a runtime e di fondere le operazioni in loop imperativi compatti. Di contro, non è possibile supportare direttamente lo \emph{zipping} tra stream concorrenti senza reintrodurre strutture di buffering o coroutine, che contrasterebbero con l'obiettivo di azzerare le allocazioni.
-  \item \textbf{Parallelismo su collezioni indicizzate}: la scelta di riservare \texttt{parallel()} alle collezioni indicizzate a dimensione nota (\texttt{Array}, \texttt{ArrayList}) impedisce rallentamenti su sorgenti inadatte. D'altro canto, esclude la parallelizzazione di flussi basati su iteratori.
-  \item \textbf{Complessità della metaprogrammazione}: l'uso avanzato di macro e beta-reduction sposta l'intero onere sul tempo di compilazione. Il codice generato azzera l'overhead a runtime, ma i tempi di compilazione e la complessità interna risultano superiori rispetto a una libreria a runtime.
+  \item \textbf{Costo di compilazione macro e dimensione del bytecode}: l'elaborazione dell'AST a compile-time e l'inlining aggressivo delle lambda tramite beta-reduction spostano l'onere computazionale sul compilatore Scala 3. Misurazioni sperimentali condotte tramite staging su JVM mostrano che la compilazione di una pipeline tipica sequenziale (\texttt{filter} + \texttt{map} + \texttt{summing}) richiede circa $128\,\text{ms}$, emettendo un loop bytecode estremamente compatto di appena $40$--$55\,\text{byte}$. Al contrario, pipeline con \texttt{flatMap} annidati richiedono circa $375\,\text{ms}$ di tempo di compilazione ($2.9\times$ superiore) per via della scomposizione ricorsiva dell'AST e dell'elaborazione di due livelli di continuazioni, generando un bytecode di circa $110$--$130\,\text{byte}$. Sebbene il tempo di compilazione sia superiore a quello richiesto da librerie a runtime, esso viene ammortizzato istantaneamente all'avvio dell'applicazione.
+  \item \textbf{Allocazione eager dell'upper bound in \texttt{toArray}}: quando una sorgente filtrata o generata da \texttt{flatMap} (la cui cardinalità esatta è incognita ma limitata superiormente da una dimensione massima nota) viene raccolta tramite \texttt{toArray}, la macro alloca preventivamente un array pari alla dimensione massima dell'intervallo. Questo compromesso privilegia la totale assenza di riallocazioni e ridimensionamenti dinamici all'interno del ciclo di attraversamento, a fronte di un potenziale consumo temporaneo di memoria qualora il predicato di filtro scarti un'elevata percentuale di elementi prima della compattazione finale.
+  \item \textbf{Rigidità sintattica della pipeline (divieto di assegnazione a \texttt{val})}: poiché la macro necessita dell'intero albero sintattico per effettuare la fusione, una pipeline \texttt{FusedStream} non può essere assegnata a una variabile intermedia (\texttt{val}) né spezzata o composta dinamicamente attraverso funzioni separate. La catena da \texttt{FusedStream.from(...)} a \texttt{.collect(...)} deve costituire un'unica espressione continua al call-site. Per casi d'uso dinamici, la libreria fornisce il modulo disgiunto \texttt{stream-fusion-runtime}.
+  \item \textbf{Operazioni non implementate rispetto a Java Stream}: l'API fused privilegia operazioni che possono essere trasformate direttamente in un unico ciclo di scansione lineare senza accumulo in memoria. Di conseguenza, operazioni che richiedono ordinamento, deduplicazione o memorizzazione intermedia globale (quali \texttt{sorted}, \texttt{distinct}, \texttt{count}, \texttt{reduce}, \texttt{min}/\texttt{max}, \texttt{anyMatch}, \texttt{allMatch}, \texttt{takeWhile}, \texttt{dropWhile}, \texttt{peek}, \texttt{zip}) non sono attualmente supportate nella macro, così come la raccolta parallela nativa in collezioni dinamiche \texttt{toList}/\texttt{toSet} (che richiede un collector custom).
+  \item \textbf{Non-associatività delle somme in virgola mobile parallele}: nella riduzione parallela di stream di \texttt{Double} o \texttt{Float} tramite \texttt{parallel().collect(summing)}, la partizione in chunk e l'ordine di riduzione dei contributi parziali dipendono dal numero di worker e da \texttt{chunksPerWorker}. A causa della non-associatività intrinseca dello standard IEEE 754, il valore numerico della somma può differire negli ultimi bit significativi rispetto alla valutazione strettamente sequenziale.
+  \item \textbf{Contatori di slice e indici in \texttt{Int}}: a differenza delle Stream Java (in cui \texttt{skip} e \texttt{limit} operano su \texttt{long}), l'API e i contatori interni di \texttt{FusedStream} adottano esclusivamente il tipo primitivo \texttt{Int}. Questa scelta architetturale mantiene il bytecode compatto e massimizza l'efficienza sui registri della CPU nei contesti reali in-memory, validando a runtime la non negatività dei parametri (\texttt{IllegalArgumentException}). Di converso, su sorgenti lazy potenzialmente infinite che richiedano uno skip superiore a $2^{31}-1$ elementi, il contatore interno incorrerebbe in overflow aritmetico.
 \end{itemize}
 
 \section{Sviluppi futuri}
@@ -1887,7 +1880,7 @@ La progettazione di un motore di fusione a compile-time su JVM impone un bilanci
 Le evidenze raccolte durante la validazione sperimentale aprono interessanti direzioni di miglioramento:
 
 \begin{itemize}
-  \item \textbf{Ottimizzazione dello scheduler parallelo}: come illustrato nella Sezione~\ref{subsec:bench-paralleli}, Java Parallel Stream sfrutta \texttt{CountedCompleter} e ottiene maggiore efficienza sulle taglie intermedie. L'attuale architettura di \texttt{FusedStream} si appoggia a un \texttt{ExecutionContext} standard sincronizzato via \texttt{CountDownLatch}. Un'indagine su uno scheduler dedicato basato direttamente su primitive \texttt{ForkJoinPool} costituisce una priorità per abbattere l'overhead di sottomissione; tale approfondimento non è stato possibile nell'ambito di questa tesi per motivi di tempo.
+  \item \textbf{Ottimizzazione dello scheduler parallelo}: come illustrato nella Sezione~\ref{subsec:bench-paralleli}, Java Parallel Stream sfrutta \texttt{CountedCompleter} e ottiene maggiore efficienza sulle taglie intermedie. L'attuale architettura di \texttt{FusedStream} si appoggia a un \texttt{ExecutionContext} standard sincronizzato via \texttt{CountDownLatch}. Un'indagine su uno scheduler dedicato basato direttamente su primitive \texttt{ForkJoinPool} costituisce una priorità per abbattere l'overhead di sottomissione; tale approfondimento non è stato possibile per motivi di tempo.
   \item \textbf{Vettorizzazione SIMD}: con le nuove API del JDK (Project Panama e la \emph{Vector API}), il generatore potrebbe emettere istruzioni vettoriali esplicite per le trasformazioni e le riduzioni aritmetiche su tipi primitivi, superando i limiti dell'auto-vettorizzazione di HotSpot C2.
   \item \textbf{Estensione dei collector paralleli}: introduzione di collector paralleli complessi con partizionamento hash (quali \texttt{groupBy} o aggregazioni associative multi-chiave), progettati per limitare le contese senza creare collezioni intermedie temporanee.
 \end{itemize}

@@ -63,7 +63,7 @@ val sum: Double = FusedStream
   .map(_.toDouble * 1.5)
   .collect(summing)
 
-println(s"Result: $sum") // Result: 45.0
+println(s"Result: $sum")
 ```
 
 ### 2. Multi-threaded Parallel Pipeline
