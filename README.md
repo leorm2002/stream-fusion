@@ -22,13 +22,8 @@ Add the JitPack resolver and library dependency to your `build.sbt`:
 resolvers += "jitpack" at "https://jitpack.io"
 
 // Core compile-time stream fusion engine
-libraryDependencies += "com.github.leorm2002" %% "stream-fusion-core" % "main-SNAPSHOT"
-
-// Optional: un-fused runtime module for dynamically composed pipelines
-libraryDependencies += "com.github.leorm2002" %% "stream-fusion-runtime" % "main-SNAPSHOT"
+libraryDependencies += "com.github.leorm2002" % "stream-fusion" % "0.1.0"
 ```
-
-> **Tip:** Replace `"main-SNAPSHOT"` with a specific release tag (e.g. `"v0.1.0"`) or commit hash for reproducible builds.
 
 ### 2. Local Development (from Source)
 
