@@ -21,7 +21,7 @@ case class CompileConfig(
 )
 
 object CompileConfig {
-  transparent inline given default: CompileConfig = CompileConfig(useUnsafe = false, enableLogging = false, strictInlining = true)
+  transparent inline given default: CompileConfig = CompileConfig(useUnsafe = true, enableLogging = false, strictInlining = true)
 
   given FromExpr[CompileConfig] with {
     def unapply(expr: Expr[CompileConfig])(using Quotes): Option[CompileConfig] = {
