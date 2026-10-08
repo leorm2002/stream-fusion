@@ -161,11 +161,11 @@ Il principio alla base della trasformazione è quello della \emph{stream fusion}
 Per certi aspetti, il modello ottenuto richiama la monomorfizzazione a compile-time dei generics adottata da Rust e i template in C++: il codice viene specializzato rispetto ai tipi concretamente utilizzati. FusedStream estende questo principio alla struttura stessa dell'esecuzione:analizzando la composizione della pipeline e generando un'implementazione specializzata rispetto alla sorgente, agli operatori e all'operazione terminale.
 
 Particolare attenzione è stata dedicata alla progettazione dell'API. Le proprietà e i vincoli della pipeline vengono rappresentati attraverso il type system. La libreria è inoltre estendibile da perte degli utilizzatori. In particolare le operazioni terminali disponibili nativamente possono essere estese tramite interfacce dedicate.
-\section{Obiettivi e criteri di valutazione}
+\section{Obiettivi}
 
 L'obiettivo del progetto è verificare se sia possibile preservare l'espressività di una pipeline dichiarativa generando codice con caratteristiche prossime a quelle di un'implementazione imperativa. La valutazione considera quindi tre aspetti principali: la correttezza semantica della trasformazione, le caratteristiche del codice generato e le prestazioni a runtime.
 
-La correttezza viene verificata mediante test funzionali e di compilazione. L'ispezione del codice e del bytecode generato permette invece di verificare l'effettiva fusione delle operazioni, la specializzazione delle chiamate e l'eliminazione di allocazioni e dispatch non necessari. Infine, benchmark dedicati confrontano il throughput con implementazioni imperative equivalenti e con le corrispondenti pipeline offerte dalle librerie standard.
+La correttezza viene verificata mediante test funzionali e di compilazione. L'ispezione del codice e del bytecode generato permette invece di verificare l'effettiva fusione delle operazioni, la specializzazione delle chiamate e l'eliminazione di allocazioni e dispatch non necessari. Infine, benchmark dedicati confrontano i tempi di esecuzione con implementazioni imperative equivalenti e con le corrispondenti pipeline offerte dalle librerie standard.
 
 \chapter{Analisi dei requisiti}
 \label{chap:requisiti}
@@ -302,7 +302,7 @@ Al fine di garantire la predicibilità prestazionale e la robustezza del compila
   A parità di sorgente, funzioni utente e configurazione, il codice generato deve produrre risultati semanticamente equivalenti a quelli definiti dalla pipeline dichiarativa.
 \end{longtable}
 
-\chapter{Background e tecnologie abilitanti}
+\chapter{Background e tecnologie utilizzate}
 \label{chap:metaprogramming}
 Questo capitolo introduce i principali concetti teorici e gli strumenti di Scala 3 necessari alla comprensione delle scelte progettuali e implementative adottate nel progetto.
 \section{Stream fusion}
@@ -686,7 +686,7 @@ stream.parallel().collect(Collector.toArray)   // valido
   \includegraphics[width=0.8\textwidth]{drawio/collector.drawio.pdf}
   \caption{Gerarchia dei Collector, politiche di terminazione e vincoli di inlining. La relazione \texttt{<<bind>>} rappresenta la specializzazione statica di un parametro di tipo (ad es. \texttt{S} con \texttt{Exhaustive} o \texttt{ShortCircuiting}).}
   \label{fig:collectors}
-  \end{figure}
+\end{figure}
 
 \paragraph{Inlining dei Collector e la modalità \texttt{strictInlining}.}
 Per ridurre le allocazioni e il dispatch dinamico a runtime, la libreria effettua l'inlining delle chiamate ai metodi del collector per default (modalità \texttt{strictInlining = true}). In questo caso il collector fornito a \texttt{collect} deve essere una classe concreta rifiutando classi anonime, classi astratte e trait e le funzioni del collector devono essere obbligatoriamente dichiarate come \texttt{inline def}.
@@ -1196,11 +1196,11 @@ elem * 2
 In questo modo la funzione non deve essere mantenuta come entità invocabile nel codice generato, eliminando il relativo dispatch.
 
 \noindent\begin{minipage}{\linewidth}
-\subsection{Chiamate e inlining dei collector}
-\label{subsec:collector-inlining}
+  \subsection{Chiamate e inlining dei collector}
+  \label{subsec:collector-inlining}
 
-Le operazioni sui collector vengono tradotte generando l'istruzione dell'AST che chiama il metodo associato sull'oggetto collector, ad esempio per l'accumulazione:
-\begin{lstlisting}[language=Scala]
+  Le operazioni sui collector vengono tradotte generando l'istruzione dell'AST che chiama il metodo associato sull'oggetto collector, ad esempio per l'accumulazione:
+  \begin{lstlisting}[language=Scala]
 Select.overloaded(collector.asTerm, "accumulator", Nil, arguments).asExprOf[T]
 \end{lstlisting}
 \end{minipage}
@@ -1624,14 +1624,14 @@ La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul mod
   \small
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Package / Sottosistema}            & \textbf{Istruzioni}  & \textbf{Coverage} \\
+    \textbf{Package / Sottosistema}   & \textbf{Istruzioni}  & \textbf{Coverage} \\
     \midrule
-    \textsf{fuse.internal.parallel}            & 282 / 282            & 100.00\%          \\
-    \textsf{fuse.internal}                     & 1336 / 1454          & 91.88\%           \\
-    \textsf{fuse.internal.ir}                  & 86 / 94              & 91.49\%           \\
-    \textsf{fuse} (API pubblica) & 29 / 68              & 42.65\%           \\
+    \textsf{fuse.internal.parallel}   & 282 / 282            & 100.00\%          \\
+    \textsf{fuse.internal}            & 1336 / 1454          & 91.88\%           \\
+    \textsf{fuse.internal.ir}         & 86 / 94              & 91.49\%           \\
+    \textsf{fuse} (API pubblica)      & 29 / 68              & 42.65\%           \\
     \midrule
-    \textbf{Totale (Branch: 91.67\%)}          & \textbf{1733 / 1898} & \textbf{91.31\%}  \\
+    \textbf{Totale (Branch: 91.67\%)} & \textbf{1733 / 1898} & \textbf{91.31\%}  \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -1643,255 +1643,230 @@ La copertura del codice è stata misurata tramite \texttt{sbt-scoverage} sul mod
 \subsection{Metodologia}
 \label{subsec:bench-metodologia}
 
-Le misurazioni sono state condotte con (JMH)~\cite{jmh}, su OpenJDK 64-Bit (21.0.7-LTS) x86\_64 (Windows). I benchmark sono stati eseguiti con:
+Le misurazioni sono state condotte con Java Microbenchmark Harness (JMH)~\cite{jmh}, su OpenJDK 64-Bit (21.0.7-LTS) x86\_64 (Windows). I dati riportati provengono da \texttt{benchmark results.md}, aggiornato al 6 ottobre 2026. La configurazione prevede:
 \begin{itemize}
-  \item Heap fissato a 8\,GB sia come dimensione iniziale che massima (\texttt{-Xms8g -Xmx8g}), eliminando pause GC di espansione heap.
-  \item Numero di thread/core attivi è stato vincolato a 4 (\texttt{-XX:ActiveProcessorCount=4}).
-  \item 3 fork indipendenti della JVM, ciascuno preceduto da 5 iterazioni di warm-up da 2 secondi e seguito da 5 iterazioni di misura effettiva da 2 secondi (15 campioni per ciascun punto sperimentale).
-  \item Salvo diversamente specificato, si opera con la configurazione di default (\texttt{useUnsafe = true}). Nella Sezione~\ref{subsec:bench-jit-levels} viene discussa l'incidenza di questo flag.
+  \item heap iniziale e massimo di 8\,GB (\texttt{-Xms8g -Xmx8g});
+  \item 4 processori disponibili alla JVM (\texttt{-XX:ActiveProcessorCount=4});
+  \item 3 fork indipendenti, ciascuno con 5 iterazioni di warm-up e 5 di misura, tutte da 2 secondi: 15 campioni per punto sperimentale.
 \end{itemize}
 
-Il comportamento della libreria viene comparato con tre implementazioni alternative:
-\begin{enumerate}
-  \item \textbf{Java Stream}: le stream della stdlib di Java (\texttt{java.util.stream}).
-  \item \textbf{Scala View}: le collezioni lazy della stdlib di Scala 3 (\texttt{scala.collection.View}).
-  \item \textbf{Loop Java manuale}: codice imperativo Java classico scritto a mano con ciclo \texttt{while} e accumulatore locale.
-\end{enumerate}
+La sorgente è un'\texttt{ArrayList} di transazioni con $N \in \{10, 100, 1\,000, 100\,000\}$. Si confrontano \texttt{FusedStream}, cicli manuali, Java Stream e Scala View. Per \texttt{FusedStream} si distinguono la configurazione predefinita (\texttt{useUnsafe = true}) e quella Safe (\texttt{useUnsafe = false}).
+
+Le tabelle riportano il tempo medio in microsecondi per operazione e il margine di errore restituito da JMH; valori inferiori indicano prestazioni migliori. Negli scenari megamorfici, \texttt{@OperationsPerInvocation(8)} normalizza il tempo delle otto query eseguite per invocazione: il valore è quindi riferito a una singola query, mediato sulle otto. Salvo diversa indicazione, i risultati sono ottenuti a Tier 4.
 
 \subsection{Benchmark sequenziali}
 \label{subsec:bench-sequenziali}
 
-Per comprendere le caratteristiche della libreria è fondamentale distinguere tra un microbenchmark sintetico e uno più simile carico applicativo reale.
-
-\subsubsection{Scenario Monomorfico}
+\subsubsection{Scenario monomorfico}
 \label{subsubsec:bench-monomorfico}
 
-Molti benchmark che hanno come oggetto le stream Java si limitano a valutare una singola, semplice pipeline (ad esempio \texttt{map} seguita da \texttt{sum}):
-$$
-  \text{Source} \xrightarrow{\text{map}(t \mapsto t.\text{amount})} \xrightarrow{\text{sum()}} \text{Double}
-$$
-In questo scenario artificiale, il compilatore JIT C2 osserva un unico target (i call site sono strettamente \emph{monomorfici}) e riesce quindi ad applicare inlining speculativo e devirtualizzazione sia alle lambda sia all'infrastruttura a oggetti di Java Stream.
-
-Tuttavia, come emerge chiaramente dai dati in Tabella~\ref{tab:bench_mono}, persino in questo contesto ideale Java Stream evidenzia limiti:
-\begin{itemize}
-  \item Su collezioni piccole l'inizializzazione della pipeline introduce un costo fisso che rende Java Stream da $6.7$ a oltre $11$ volte più lenta di \texttt{FusedStream} e del loop manuale.
-  \item Su volumi consistenti ($N = 100\,000$), nonostante l'inlining di C2, Java Stream non raggiunge la velocità del codice imperativo classico.
-\end{itemize}
+Il primo scenario esegue una sola pipeline, che estrae e somma gli importi delle transazioni (\texttt{map} seguito da \texttt{sum}). I call site delle funzioni osservano un unico target, favorendo l'inlining da parte del JIT.
 
 \begin{table}[htbp]
   \centering
-  \caption{Benchmark Monomorfico: tempo medio di esecuzione ($\mu\text{s}/\text{op}$).}
+  \caption{Scenario monomorfico a Tier 4: tempo medio ($\mu\text{s}/\text{op}$).}
   \label{tab:bench_mono}
   \vspace{2mm}
   \small
+  \setlength{\tabcolsep}{4pt}
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Implementazione}  & \textbf{$N = 10$}          & \textbf{$N = 100$}         & \textbf{$N = 1\,000$}      & \textbf{$N = 100\,000$}     \\
+    \textbf{Implementazione}      & \textbf{$N = 10$} & \textbf{$N = 100$} & \textbf{$N = 1\,000$} & \textbf{$N = 100\,000$} \\
     \midrule
-    \textsf{FusedStream}      & $\mathbf{0.006 \pm 0.001}$ & $\mathbf{0.067 \pm 0.001}$ & $\mathbf{0.914 \pm 0.002}$ & $\mathbf{504.66 \pm 11.23}$ \\
-    \textsf{Java Manual Loop} & $0.007 \pm 0.001$          & $0.068 \pm 0.001$          & $0.918 \pm 0.002$          & $507.56 \pm 6.60$           \\
-    \textsf{Scala View}       & $0.042 \pm 0.001$          & $0.331 \pm 0.006$          & $3.230 \pm 0.021$          & $335.44 \pm 3.46$           \\
-    \textsf{Java Stream}      & $0.068 \pm 0.001$          & $0.451 \pm 0.005$          & $4.290 \pm 0.007$          & $857.71 \pm 16.89$          \\
+    \textsf{FusedStream (Unsafe)} & $0.006 \pm 0.001$ & $0.067 \pm 0.001$  & $0.897 \pm 0.002$     & $92.760 \pm 0.224$      \\
+    \textsf{FusedStream (Safe)}   & $0.007 \pm 0.001$ & $0.067 \pm 0.001$  & $0.896 \pm 0.001$     & $94.040 \pm 1.072$      \\
+    \textsf{Java Manual Loop}     & $0.007 \pm 0.001$ & $0.067 \pm 0.001$  & $0.896 \pm 0.002$     & $92.869 \pm 0.257$      \\
+    \textsf{Java Stream}          & $0.067 \pm 0.001$ & $0.451 \pm 0.007$  & $4.279 \pm 0.007$     & $428.277 \pm 1.573$     \\
+    \textsf{Scala View}           & $0.041 \pm 0.001$ & $0.317 \pm 0.005$  & $3.115 \pm 0.023$     & $320.285 \pm 4.191$     \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\subsubsection{Scenario Megamorfico (Carico applicativo reale)}
+La Tabella~\ref{tab:bench_mono} mostra tempi sostanzialmente allineati tra \texttt{FusedStream}, la variante Safe e il ciclo manuale. Su $100\,000$ elementi, \texttt{FusedStream} richiede $92.760\,\mu\text{s}$, contro $92.869\,\mu\text{s}$ del ciclo manuale; Java Stream e Scala View richiedono rispettivamente circa $4.62$ e $3.45$ volte il tempo della versione fused.
+
+\subsubsection{Scenario megamorfico}
 \label{subsubsec:bench-megamorfico}
 
-Questo scenario simula un carico di analisi e reportistica su dati in-memory, eseguendo 8 query eterogenee su dati rappresentanti transazioni finanziarie. Ciascuna delle 8 query è isolata in un metodo statico dedicato (\texttt{@static def}) invocato in sequenza dal metodo di benchmark, garantendo che ogni pipeline venga compilata e ottimizzata in modo modulare dal compilatore JIT.
-
-Nelle applicazioni reali, più pipeline distinte invocano operatori con lambda differenti. In Java Stream e Scala View i call site interni delle interfacce funzionali diventano \emph{megamorfici} (più di due classi concrete osservate a runtime). La inline cache della JVM collassa, perdendo inlining speculativo e escape analysis. La JVM è costretta a eseguire dispatch virtuali ad ogni singolo elemento. Come riportato in Tabella~\ref{tab:bench_mega}, le prestazioni di \texttt{FusedStream} equivalgono a quelle del codice Java manuale lungo tutti gli ordini di grandezza analizzati, dimostrando la completa rimozione dell'overhead funzionale tramite inlining a compile-time.
+Il secondo scenario esegue otto query eterogenee di filtro, trasformazione e somma sulle stesse transazioni. Le query sequenziali sono definite in metodi statici separati. La presenza di lambda differenti sollecita i call site condivisi delle librerie a runtime, rendendo meno efficace l'inlining speculativo; \texttt{FusedStream} incorpora invece le lambda nel codice generato a compile-time.
 
 \begin{table}[htbp]
   \centering
-  \caption{Benchmark Megamorfico Sequenziale: 8 query eterogenee ($\mu\text{s}/\text{op}$).}
+  \caption{Scenario megamorfico sequenziale a Tier 4: tempo medio per query ($\mu\text{s}/\text{op}$).}
   \label{tab:bench_mega}
   \vspace{2mm}
   \small
+  \setlength{\tabcolsep}{4pt}
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Implementazione}      & \textbf{$N = 10$}          & \textbf{$N = 100$}         & \textbf{$N = 1\,000$}      & \textbf{$N = 100\,000$}     \\
+    \textbf{Implementazione}      & \textbf{$N = 10$} & \textbf{$N = 100$} & \textbf{$N = 1\,000$} & \textbf{$N = 100\,000$} \\
     \midrule
-    \textsf{FusedStream (Unsafe)} & $\mathbf{0.012 \pm 0.001}$ & $\mathbf{0.087 \pm 0.003}$ & $\mathbf{1.489 \pm 0.146}$ & $\mathbf{131.53 \pm 13.73}$ \\
-    \textsf{FusedStream (Safe)}   & $\mathbf{0.012 \pm 0.001}$ & $\mathbf{0.085 \pm 0.003}$ & $\mathbf{1.278 \pm 0.009}$ & $\mathbf{126.98 \pm 16.58}$ \\
-    \textsf{Java Manual Loop}     & $0.011 \pm 0.001$          & $0.083 \pm 0.001$          & $1.270 \pm 0.005$          & $119.20 \pm 7.06$           \\
-    \textsf{Java Stream}          & $0.089 \pm 0.001$          & $0.504 \pm 0.019$          & $4.649 \pm 0.134$          & $466.33 \pm 2.51$           \\
-    \textsf{Scala View}           & $0.061 \pm 0.001$          & $0.485 \pm 0.006$          & $4.805 \pm 0.121$          & $639.96 \pm 20.52$          \\
+    \textsf{FusedStream (Unsafe)} & $0.011 \pm 0.001$ & $0.082 \pm 0.001$  & $1.267 \pm 0.004$     & $114.744 \pm 2.171$     \\
+    \textsf{FusedStream (Safe)}   & $0.012 \pm 0.001$ & $0.083 \pm 0.002$  & $1.272 \pm 0.010$     & $117.412 \pm 1.863$     \\
+    \textsf{Java Manual Loop}     & $0.011 \pm 0.001$ & $0.082 \pm 0.001$  & $1.260 \pm 0.003$     & $115.942 \pm 1.505$     \\
+    \textsf{Java Stream}          & $0.084 \pm 0.008$ & $0.511 \pm 0.026$  & $4.688 \pm 0.141$     & $474.972 \pm 17.787$    \\
+    \textsf{Scala View}           & $0.062 \pm 0.001$ & $0.492 \pm 0.011$  & $4.943 \pm 0.337$     & $631.320 \pm 4.161$     \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\paragraph{Analisi dei risultati.}
-I dati sperimentali riportati in Tabella~\ref{tab:bench_mega} evidenziano le prestazioni delle diverse soluzioni a confronto:
-\begin{enumerate}
-  \item \textbf{Dominio prestazionale su tutte le scale}: sia \texttt{FusedStream} sia il ciclo imperativo Java manuale mostrano tempi di esecuzione equivalenti lungo tutti i valori di $N$. Su collezioni di dimensioni ridotte ($N \le 100$), \texttt{FusedStream} supera Java Stream fino a $\mathbf{7.4\times}$ e Scala View fino a $\mathbf{5.1\times}$, grazie alla completa rimozione a compile-time delle allocazioni di descrittori di stream e iteratori intermedi.
-  \item \textbf{Scalabilità sui grandi volumi}: su collezioni di $100\,000$ elementi, \texttt{FusedStream} risulta $\mathbf{3.5\times}$ più rapido di Java Stream e $\mathbf{4.9\times}$ più rapido di Scala View.
-  \item \textbf{Parità tra accesso sicuro e Unsafe}: il confronto diretto tra \texttt{FusedStream (Unsafe)} e \texttt{FusedStream (Safe)} dimostra che con C2 attivo, il costo di accesso agli elementi della lista viene ottimizzato dal compilatore JIT, rendendo la versione fase analoga.
-\end{enumerate}
+Anche in questo scenario \texttt{FusedStream} mantiene tempi vicini al ciclo manuale (Tabella~\ref{tab:bench_mega}). Con $N = 100\,000$, i tempi sono $114.744\,\mu\text{s}$ per la versione predefinita, $117.412\,\mu\text{s}$ per la variante Safe e $115.942\,\mu\text{s}$ per il ciclo manuale. Rispetto alla versione predefinita, Java Stream richiede circa $4.14$ volte il tempo e Scala View circa $5.50$ volte. L'accesso Safe produce risultati simili con C2 attivo; la sua incidenza ai livelli JIT inferiori è discussa nella Sezione~\ref{subsec:bench-jit-levels}.
 
 \subsection{Benchmark paralleli}
 \label{subsec:bench-paralleli}
 
-La valutazione del runtime parallelo analizza l'efficienza nell'esecuzione su un pool di 4 core fisici. Vengono messi a confronto:
-\begin{itemize}
-  \item \texttt{FusedStream.parallel()}: partizionamento statico indicizzato con chunk distribuiti dinamicamente
-  \item \texttt{Java parallelStream()}: parallelismo nativo di Java basato su decomposizione ricorsiva con \texttt{Spliterator} su \texttt{ForkJoinPool}.
-  \item \texttt{Java Manual Parallel}: chunking manuale dell'array con sottomissione concorrente di task Callable tramite \texttt{invokeAll} su \texttt{ForkJoinPool}.
-\end{itemize}
-
-I risultati sono riassunti in Tabella~\ref{tab:bench_par}.
+Lo scenario parallelo esegue le stesse otto query. Si confrontano \texttt{FusedStream} con \texttt{parallel()}, Java Parallel Stream e una versione manuale che suddivide i dati in chunk e sottopone task a un \texttt{ForkJoinPool}. La JVM dispone di 4 processori in tutte le configurazioni.
 
 \begin{table}[htbp]
   \centering
-  \caption{Benchmark Megamorfico Parallelo: 8 query eterogenee ($\mu\text{s}/\text{op}$).}
+  \caption{Scenario megamorfico parallelo a Tier 4: tempo medio per query ($\mu\text{s}/\text{op}$).}
   \label{tab:bench_par}
   \vspace{2mm}
   \small
+  \setlength{\tabcolsep}{4pt}
   \begin{tabular}{lcccc}
     \toprule
-    \textbf{Implementazione}      & \textbf{$N = 10$} & \textbf{$N = 100$} & \textbf{$N = 1\,000$} & \textbf{$N = 100\,000$}     \\
+    \textbf{Implementazione}      & \textbf{$N = 10$}  & \textbf{$N = 100$} & \textbf{$N = 1\,000$} & \textbf{$N = 100\,000$} \\
     \midrule
-    \textsf{FusedStream Parallel} & $10.66 \pm 0.32$  & $13.11 \pm 0.61$   & $14.32 \pm 0.57$      & $\mathbf{435.77 \pm 12.67}$ \\
-    \textsf{Java Manual Parallel} & $11.27 \pm 0.50$  & $12.72 \pm 0.59$   & $13.16 \pm 0.67$      & $617.78 \pm 13.27$          \\
-    \textsf{Java Parallel Stream} & $3.75 \pm 0.14$   & $4.90 \pm 0.21$    & $8.83 \pm 0.48$       & $1029.31 \pm 16.26$         \\
+    \textsf{FusedStream Parallel} & $11.221 \pm 0.969$ & $11.893 \pm 1.009$ & $14.037 \pm 0.455$    & $48.199 \pm 0.318$      \\
+    \textsf{Java Manual Parallel} & $11.077 \pm 0.780$ & $11.976 \pm 0.951$ & $13.345 \pm 0.505$    & $66.263 \pm 0.770$      \\
+    \textsf{Java Parallel Stream} & $3.772 \pm 0.051$  & $5.124 \pm 0.220$  & $8.668 \pm 0.516$     & $148.636 \pm 3.138$     \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\paragraph{Speedup, efficienza e analisi di scalabilità a 4 core.}
-Dall'analisi comparativa tra il benchmark sequenziale di riferimento a Tier 4 e il benchmark parallelo (Tabella~\ref{tab:bench_par}) sulla taglia massima ($N = 100\,000$), emergono i seguenti indici di scalabilità:
-\begin{itemize}
-  \item \textbf{FusedStream}: tempo sequenziale di riferimento $799.50\,\mu\text{s}$, tempo parallelo $435.77\,\mu\text{s}$. Lo speedup è pari a $\mathbf{1.83\times}$, corrispondente a un'efficienza parallela del $\mathbf{45.8\%}$ (rispetto all'accelerazione ideale di $4\times$ sui 4 core).
-  \item \textbf{Java Manual Parallel}: tempo sequenziale di riferimento $758.64\,\mu\text{s}$, tempo parallelo $617.78\,\mu\text{s}$. Speedup pari a $\mathbf{1.23\times}$, con un'efficienza del $\mathbf{30.7\%}$.
-  \item \textbf{Java Parallel Stream}: tempo sequenziale di riferimento $1261.43\,\mu\text{s}$, tempo parallelo $1029.31\,\mu\text{s}$. Speedup pari a $\mathbf{1.23\times}$, con un'efficienza del $\mathbf{30.6\%}$.
-\end{itemize}
+Su $100\,000$ elementi, \texttt{FusedStream} passa da $114.744$ a $48.199\,\mu\text{s}$ per query: lo speedup è $2.38\times$, con un'efficienza del $59.5\%$ rispetto al riferimento ideale di $4\times$. La versione manuale raggiunge $1.75\times$ e Java Parallel Stream $3.20\times$. Quest'ultima scala meglio rispetto al proprio sequenziale, ma impiega comunque circa $3.08$ volte il tempo di \texttt{FusedStream} parallelo.
 
-I risultati offrono chiarimenti cruciali sulle dinamiche della concorrenza su JVM:
-\begin{enumerate}
-  \item \textbf{Perché Java Parallel Stream scala poco ($1.23\times$)}: Java Parallel Stream divide ricorsivamente il flusso tramite \texttt{Spliterator}, allocando oggetti \texttt{ForkJoinTask} e introducendo continuo overhead di work-stealing. Poiché l'elaborazione di $100\,000$ elementi richiede solo circa $1\,\text{ms}$, il costo di allocazione dei task e coordinamento tra i thread rivaleggia con il tempo effettivo di calcolo.
-  \item \textbf{Perché FusedStream non supera il 46\% di efficienza}: benché \texttt{FusedStream.parallel()} superi Java Parallel Stream di ben $2.36\times$ grazie al chunking statico lineare senza allocazioni nel loop, l'efficienza teorica del 100\% non è raggiungibile per due fattori determinanti:
-        \begin{itemize}
-          \item \emph{Memory Bandwidth Wall}: l'iterazione parallela di 4 thread su $100\,000$ riferimenti ad oggetti e la scansione dei campi in memoria satura la banda passante del bus verso la RAM e genera traffico di coerenza nella cache L3 condivisa. Il calcolo (filtro su interi e somma di double) è estremamente leggero rispetto al costo di recupero dei dati dalla memoria principale, ricadendo nei limiti imposti dalla Legge di Amdahl per carichi memory-bound.
-          \item \emph{Overhead di dispatch e riduzione finale}: la sottomissione dei chunk all'\texttt{ExecutionContext}, l'attesa su \texttt{CountDownLatch} e la successiva riduzione sequenziale ordinata dei risultati parziali rappresentano una frazione seriale non azzerabile.
-        \end{itemize}
-  \item \textbf{Comportamento su taglie ridotte ($N \le 1\,000$)}: per taglie contenute la parallelizzazione è sistematicamente controproducente ($10$--$14\,\mu\text{s}$ contro $0.01$--$1.4\,\mu\text{s}$ del sequenziale), dimostrando come l'attivazione del multi-threading debba essere riservata a dataset estesi. Su tali taglie minime, Java Parallel Stream risulta marginalmente più rapido per via dell'integrazione diretta con primitive di basso livello di \texttt{ForkJoinPool}, che riducono i context switch rispetto a un \texttt{ExecutionContext} generico sincronizzato via \texttt{CountDownLatch}.
-\end{enumerate}
+Per $N \le 1\,000$, il costo di coordinamento supera il beneficio della suddivisione del lavoro: tutte le versioni parallele risultano più lente delle corrispondenti sequenziali. Java Parallel Stream ha tempi inferiori alle altre versioni parallele su queste taglie. Il vantaggio del parallelismo dipende quindi dalla dimensione e dal costo della computazione.
 
-\subsection{Comportamento a freddo e livelli di compilazione JIT}
+\subsection{Livelli di compilazione JIT}
 \label{subsec:bench-jit-levels}
 
-Nelle applicazioni moderne (funzioni serverless o microservizi), le prestazioni durante l'avvio a freddo e i primi cicli di esecuzione sono rilevanti per contenere la latenza iniziale (\emph{cold start}).
-
-L'architettura di compilazione HotSpot (\emph{Tiered Compilation}) prevede cinque livelli di esecuzione, controllabili tramite il flag JVM \texttt{-XX:TieredStopAtLevel=\$tier}:
-\begin{itemize}
-  \item \textbf{Tier 0}: interpretazione pura del bytecode JVM istruzione per istruzione.
-  \item \textbf{Tier 1}: compilazione nativa immediata tramite il compilatore Client C1 senza profilazione (\texttt{-XX:TieredStopAtLevel=1}).
-  \item \textbf{Tier 2 e Tier 3}: compilazione C1 con profilazione di base e completa (contatori di invocazione e branch).
-  \item \textbf{Tier 4}: compilazione Server C2 con inlining speculativo, escape analysis e vettorizzazione SIMD (\texttt{-XX:TieredStopAtLevel=4}).
-\end{itemize}
-
-I livelli Tier 2 e Tier 3 rappresentano fasi di transizione in cui la JVM raccoglie profili prima della promozione a C2. Per questa ragione, la Tabella~\ref{tab:bench_tiers} confronta i tre livelli fondamentali: l'interprete puro (Tier 0), il compilatore C1 (Tier 1) e il compilatore C2 (Tier 4), tutti vincolati a 4 core 8\,GB di heap.
+Per valutare la dipendenza dalle ottimizzazioni della JVM, i benchmark sono stati ripetuti limitando HotSpot tramite \texttt{-XX:TieredStopAtLevel}: Tier 0 esegue il bytecode nell'interprete, Tier 1 usa C1 senza profilazione e Tier 4 consente la compilazione C2. La Tabella~\ref{tab:bench_tiers} riassume il confronto sullo scenario megamorfico di taglia maggiore.
 
 \begin{table}[htbp]
   \centering
-  \caption{Confronto prestazioni sui livelli JIT nello scenario Megamorfico ($\mu\text{s}/\text{op}$).}
+  \caption{Scenario megamorfico sequenziale con $N = 100\,000$: confronto dei livelli JIT ($\mu\text{s}/\text{op}$).}
   \label{tab:bench_tiers}
   \vspace{2mm}
   \small
-  \begin{tabular}{lcccc}
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lccc}
     \toprule
-    \textbf{Configurazione JIT} & \textbf{FusedStream}          & \textbf{Java Manual}  & \textbf{Java Stream}  & \textbf{Scala View}   \\
+    \textbf{Implementazione}      & \textbf{Tier 0}         & \textbf{Tier 1}       & \textbf{Tier 4}      \\
     \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 10$:}}                                                                                       \\
-    Tier 0 (Interprete puro)    & $\mathbf{0.901 \pm 0.013}$    & $1.240 \pm 0.049$     & $4.839 \pm 0.057$     & $14.519 \pm 0.806$    \\
-    Tier 1 (C1)                 & $\mathbf{0.041 \pm 0.001}$    & $0.037 \pm 0.001$     & $0.331 \pm 0.003$     & $0.544 \pm 0.005$     \\
-    Tier 4 (C2 completo)        & $\mathbf{0.012 \pm 0.001}$    & $0.011 \pm 0.001$     & $0.089 \pm 0.001$     & $0.061 \pm 0.001$     \\
-    \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 100$:}}                                                                                      \\
-    Tier 0 (Interprete puro)    & $\mathbf{5.561 \pm 0.096}$    & $11.179 \pm 0.653$    & $16.342 \pm 0.599$    & $47.982 \pm 0.952$    \\
-    Tier 1 (C1)                 & $\mathbf{0.371 \pm 0.005}$    & $0.383 \pm 0.001$     & $1.159 \pm 0.005$     & $2.223 \pm 0.062$     \\
-    Tier 4 (C2)                 & $\mathbf{0.087 \pm 0.003}$    & $0.083 \pm 0.001$     & $0.504 \pm 0.019$     & $0.485 \pm 0.006$     \\
-    \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 1\,000$:}}                                                                                   \\
-    Tier 0 (Interprete puro)    & $\mathbf{52.12 \pm 0.39}$     & $110.64 \pm 3.93$     & $125.72 \pm 2.81$     & $374.04 \pm 10.85$    \\
-    Tier 1 (C1)                 & $\mathbf{3.68 \pm 0.11}$      & $3.88 \pm 0.02$       & $8.71 \pm 0.03$       & $18.29 \pm 0.07$      \\
-    Tier 4 (C2)                 & $\mathbf{1.49 \pm 0.15}$      & $1.27 \pm 0.005$      & $4.65 \pm 0.134$      & $4.81 \pm 0.121$      \\
-    \midrule
-    \multicolumn{5}{l}{\textit{Taglia $N = 100\,000$:}}                                                                                 \\
-    Tier 0 (Interprete puro)    & $\mathbf{5571.19 \pm 191.09}$ & $11540.42 \pm 226.61$ & $12488.01 \pm 415.40$ & $37431.55 \pm 700.42$ \\
-    Tier 1 (C1)                 & $\mathbf{1172.27 \pm 21.24}$  & $1239.64 \pm 14.59$   & $1575.74 \pm 13.49$   & $1851.88 \pm 45.52$   \\
-    Tier 4 (C2)                 & $\mathbf{131.53 \pm 13.73}$   & $119.20 \pm 7.06$     & $466.33 \pm 2.51$     & $639.96 \pm 20.52$    \\
+    \textsf{FusedStream (Unsafe)} & $6251.653 \pm 407.145$  & $351.903 \pm 1.025$   & $114.744 \pm 2.171$  \\
+    \textsf{FusedStream (Safe)}   & $11451.373 \pm 181.944$ & $383.883 \pm 3.203$   & $117.412 \pm 1.863$  \\
+    \textsf{Java Manual Loop}     & $10971.256 \pm 253.405$ & $384.549 \pm 3.535$   & $115.942 \pm 1.505$  \\
+    \textsf{Java Stream}          & $11842.252 \pm 216.593$ & $812.151 \pm 4.153$   & $474.972 \pm 17.787$ \\
+    \textsf{Scala View}           & $35947.208 \pm 543.829$ & $1761.645 \pm 24.225$ & $631.320 \pm 4.161$  \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-I risultati sperimentali mettono in luce considerazioni teoriche e pratiche fondamentali:
-\begin{enumerate}
-  \item \textbf{Efficienza a Tier 0 e parità di accesso a \texttt{ArrayList}}: in modalità interpretata pura (Tier 0), \texttt{FusedStream} risulta oltre $2$ volte più veloce perfino del ciclo Java manuale ($52.12\,\mu\text{s}$ contro $110.64\,\mu\text{s}$ su $N = 1\,000$, e $5.57\,\text{ms}$ contro $11.54\,\text{ms}$ su $N = 100\,000$). L'origine di questo divario risiede nella tecnica di accesso a \texttt{ArrayList}: con la configurazione di default \texttt{useUnsafe = true} (che sfrutta il flag \texttt{--add-opens}), \texttt{FusedStream} accede direttamente al vettore \texttt{elementData} tramite istruzioni bytecode \texttt{aaload}, azzerando i controlli di bounds. Nel loop Java manuale, invece, ogni elemento viene recuperato invocando \texttt{list.get(i)} con un'istruzione \texttt{invokevirtual}, che in modalità interpretata comporta un pesante overhead di call-frame e controllo dei limiti. Disabilitando l'accesso non sicuro con \texttt{useUnsafe = false}, \texttt{FusedStream} emette a sua volta chiamate \texttt{list.get(i)}, allineandosi perfettamente alle prestazioni del ciclo manuale.
-  \item \textbf{Prestazioni immediate a Tier 1}: non appena il compilatore C1 interviene (Tier 1), anche senza profilazione né analisi di inlining avanzata, \texttt{FusedStream} raggiunge immediatamente prestazioni equivalenti al ciclo Java manuale ($3.68\,\mu\text{s}$ contro $3.88\,\mu\text{s}$ su $N = 1\,000$). Al contrario, Java Stream e Scala View sono da $2.4\times$ a $5\times$ più lente, confermando la loro dipendenza critica dalle ottimizzazioni speculative di C2.
-  \item \textbf{Comportamento di warm-up e azzeramento del debito funzionale}: il passaggio da Tier 0 a Tier 4 registra un'accelerazione di diversi ordini di grandezza per tutte le implementazioni (da $5.57\,\text{ms}$ a $0.13\,\text{ms}$ per \texttt{FusedStream}), riflettendo il fisiologico guadagno derivante dalla traduzione in codice macchina nativo e dall'allocazione nei registri CPU. Tuttavia, ciò che \texttt{FusedStream} azzera completamente è il \emph{warm-up funzionale}: poiché il bytecode generato alla compilazione è già nella forma canonica di un ciclo imperativo privo di iteratori intermedi e closure, la JVM non deve attraversare cicli di de-ottimizzazione, né attendere che C2 tenti speculativamente di monomorfizzare call site megamorfici o di eliminare wrapper tramite Escape Analysis. Fin dal primo ciclo interpretato, \texttt{FusedStream} esibisce la stessa semantica esecutiva di un loop a basso livello.
-\end{enumerate}
+A Tier 0, l'accesso diretto al vettore interno dell'\texttt{ArrayList} favorisce la configurazione predefinita: $6251.653\,\mu\text{s}$ contro $11451.373\,\mu\text{s}$ della variante Safe e $10971.256\,\mu\text{s}$ del ciclo manuale. La variante Safe usa \texttt{get(i)}, come il ciclo manuale, e presenta tempi più vicini a quest'ultimo. A Tier 1 entrambe le versioni fused sono già prossime al ciclo manuale; a Tier 4 il divario tra Safe e Unsafe si riduce ulteriormente.
 
-\subsection{Allocazioni e comportamento del Garbage Collector}
+Il risultato è coerente con la generazione di un ciclo specializzato prima dell'esecuzione. Queste misure confrontano però regimi di compilazione fissati, ciascuno dopo il warm-up previsto da JMH: non misurano direttamente il tempo di avvio né la transizione tra i livelli JIT.
+
+\subsection{Allocazioni}
 \label{subsec:bench-allocazioni}
 
-Oltre al throughput, un fattore critico per le prestazioni stabili in produzione è l'impatto sul Garbage Collector (GC). Le librerie funzionali convenzionali producono un flusso continuo di oggetti a vita breve:
+Le trasformazioni operano su variabili locali e i collector primitivi accumulano direttamente su valori scalari. Restano possibili allocazioni legate alla sorgente, alle funzioni utente, ai risultati raccolti e ai task paralleli; per tipi generici il boxing segue la semantica ordinaria della JVM.
+
+I risultati disponibili riportano tempi di esecuzione, senza misure delle allocazioni o dell'attività del Garbage Collector. Non consentono quindi di quantificare la riduzione delle allocazioni né il suo contributo alle prestazioni osservate.
+
+\chapter{Processo di sviluppo}
+\label{ch:processo-sviluppo}
+
+\section{Modello di sviluppo}
+\label{sec:modello-sviluppo}
+
+Ho seguito un processo iterativo e incrementale, ispirato alla moadalità agile riviste in ottica di un progetto individuale. In particolare non ho utilizzato approccio strutturato come Scrum o formalizzato le fasi come sturmenti come jira: gli sprint, il backlog formale e il feedback periodico sono stati mantenuti "mentalmente". Il feedback è stato svolto dai test e dai benchmark. Il processo è osservabile direttamente dalla storia dello sviluppo
+
+Ho seguito un processo iterativo e incrementale, ispirato alle metodologie agili e adattato a un progetto individuale di durata ridotta. Non ho adottato un framework strutturato come Scrum né formalizzato il lavoro con strumenti come Jira: sprint e backlog sono rimasti impliciti, tenuti a mente anziché tracciati. Il feedback periodico non è stato strutturato sotto forma di test e dai benchmark. Il processo è osservabile direttamente nella cronologia Git, che documenta la successione delle iterazioni.
+
+Le caratteristiche del processo sono le seguenti:
 \begin{itemize}
-  \item \textbf{Istanze di closure e lambda}: se le funzioni catturano variabili dall'ambiente circostante, la JVM è costretta ad allocare un'istanza sullo heap ad ogni valutazione della query.
-  \item \textbf{Descrittori di pipeline}: ogni stadio intermedio (\texttt{map}, \texttt{filter}) in Java Stream alloca un nodo \texttt{ReferencePipeline} e le relative classi interne.
-  \item \textbf{Boxing di primitivi}: in assenza di stream primitivi specializzati ogni valore transita attraverso oggetti wrapper.
-  \item \textbf{Wrapper di iteratori}: in Scala View ogni operatore crea un nuovo oggetto \texttt{Iterator} anonimo che incapsula l'iteratore a monte.
+  \item \textbf{Prototipo funzionante fin dall'inizio:} la prima versione consisteva in una libreria, semplice ma già completa ed ha permesso di verificare presto la fattibilità.
+  \item \textbf{Feedback continuo:} i test end to end ed i primi benchmark hanno portato a rivedere iterativamente sia l'API che l'implementazione interna
+  \item \textbf{Refactoring incrementale:} l'architettura si è consolidata per passi successivi, mantenendo la libreria funzionante e testata a ogni passaggio.
+  \item \textbf{Integrazione continua:} una pipeline di CI eseguita tramite github action compila il progetto ed esegue i test a ogni modifica.
 \end{itemize}
 
-Questo induce frequenti cicli di garbage collection e fluttuazioni nella latenza di risposta.
+Sono presenti macrofasi riconoscibili: verifica della fattibilità, strutturazione della soluzione, revisione dell'architettura e completamento.
+\section{Fasi di sviluppo}
+\label{sec:fasi-sviluppo}
 
-\texttt{FusedStream} riduce le allocazioni introdotte dalla rappresentazione e dalla composizione della pipeline:
-\begin{itemize}
-  \item Il ciclo di attraversamento è un costrutto nativo \texttt{while} senza iteratori intermedi;
-  \item I valori trasformati vengono mantenuti in variabili locali, facilmente eliminate dal JIT compiler;
-  \item I collector primitivi dedicati (come \texttt{summing}) accumulano direttamente su variabili primitive scalari (\texttt{double}, \texttt{int}), eliminando totalmente il boxing;
-\end{itemize}
+Si possono individuare cinque fasi principali:
 
-Per pipeline a tipi generici su collezioni a oggetti o per collector personalizzati non specializzati su tipi primitivi, le allocazioni di boxing e memorizzazione a runtime seguono la semantica standard del sistema dei tipi della JVM.
+\begin{enumerate}
+  \item \textbf{Prototipazione e verifica di fattibilità.}
+        È stata realizzata una prima implementazione end-to-end, comprendente la DSL, il parsing delle espressioni Scala, una rappresentazione intermedia delle operazioni e la generazione di codice imperativo mediante macro.
 
-\chapter{Retrospettiva}
-\label{chap:retrospettiva}
+  \item \textbf{Evoluzione della DSL e prime ottimizzazioni.}
+        L'interfaccia pubblica è stata reingegnerizzata introducendo una distinzione più chiara tra sorgenti, operazioni intermedie e operazioni terminali. Sono stati ampliati gli operatori supportati e introdotti controlli sulle pipeline non valide. Le prime valutazioni prestazionali hanno inoltre evidenziato alcuni limiti ed errori di implementazione, stati introdotti percorsi specializzati per le sorgenti indicizzabili, la materializzazione in array e le operazioni di somma.
 
-In questo capitolo vengono riassunte le considerazioni emerse durante lo sviluppo di \texttt{FusedStream}, analizzando i compromessi tecnici adottati, i limiti attuali della soluzione e le prospettive di evoluzione futura.
+  \item \textbf{Riorganizzazione della rappresentazione intermedia e delle strategie di esecuzione.}
+        La rappresentazione intermedia interna è stata ristrutturata distinguendo la rappresentazione ottenuta dal parsing da quella arricchita con informazioni necessarie alla generazione. Sono state formalizzate le strategie di collect, le proprietà riguardanti la cardinalità, informazioni sull'indizzazione e le condizioni di terminazione anticipata. Questa separazione ha permesso di concentrare l'analisi e le decisioni di ottimizzazione in una fase dedicata, riducendo la complessità del generatore.
+
+  \item \textbf{Separazione del backend di generazione.}
+        Il generatore è stato diviso in due stadi: la costruzione di una rappresentazione delle operazioni secondo un modello imperativo, e il successivo lowering nell'AST Scala. Questa separazione ha disaccoppiato la definizione del piano di esecuzione dalla costruzione del codice, rendendo la libreria più semplice da manutenere ed estendere.
+
+  \item \textbf{Introduzione del parallelismo e consolidamento finale.}
+        La librerie è stata estesa per supportare l'esecuzione parallela su sorgenti partizionabili. Sono stati inoltre rafforzati i vincoli di tipo della DSL per escludere a compile time pipeline non supportate. La fase conclusiva ha compreso affinamenti prestazionali e la valutazione comparativa mediante benchmark.
+\end{enumerate}
+
+\section{Gestione del repository}
+\label{sec:gestione-repository}
+
+Essendo un progetto individuale, non ho investito particolarmente nelle pratiche di coordinamento del repository. Per il lavoro ordinario ho usato direttamente \texttt{main}, senza adottare un processo di sviluppo specifico. Ho definito la formattazione secondo le mie preferenze, fissandole per il codice nella configurazione di Scalafmt, senza dover concordare convenzioni con altri sviluppatori.
+
+\section{Automazione}
+\label{sec:automazione}
+
+Anche l'automazione è rimasta essenziale. Ho introdotto una pipeline di CI per compilare il progetto, eseguire i test e produrre il report di copertura. Non ho dedicato particolare tempo a un processo di release automatizzate. Questa scelta ha permesso di concentrarsi sulla libreria, gestendo questa attività manualmente visto che il loro costo non sarebbe stato ammortizzato vista la breve vita del progetto.
+
+\chapter{Conclusioni}
+\label{chap:conclusioni}
+
+\section{Retrospettiva}
+\label{sec:retrospettiva}
+
+\subsection{Difficoltà incontrate}
+\label{sec:difficolta-incontrate}
+
+La difficoltà principale è stata la scarsità di documentazione orientata allo sviluppo per le funzionalità avanzate di metaprogrammazione. Non si tratta di un vuoto di letteratura: esiste documentazione accademica sull'argomento, ma i concetti si intrecciano con la gestione dei tipi di Scala, particolarmente complessa, e questo rende difficile passare dalla teoria all'implementazione. Capire come combinare macro e reflection a compile-time ha richiesto più tempo del previsto, soprattutto per ricostruire possibilità e vincoli delle API del compilatore. A questo si è aggiunto il costo delle revisioni architetturali: alcuni confini tra le responsabilità dei componenti sono diventati chiari solo dopo l'implementazione iniziale.
+
+Una delle difficoltà ha riguardato il tooling. Ho trovato il supporto dell'IDE per Scala (VS Code) decisamente meno completo e stabile meno completo rispetto a quanto presente per altri linguaggi.
+
 
 \section{Limiti e compromessi progettuali}
 \label{sec:limiti-compromessi}
 
-La progettazione di un motore di fusione a compile-time su JVM impone un bilanciamento continuo tra espressività dell'API, complessità delle macro e prestazioni del codice generato. Le principali scelte di compromesso hanno riguardato:
+Il compromesso centrale riguarda il rapporto tra le operazioni offerte \emph{out of the box} e la complessità della libreria. Includere nativamente un gran numero di operatori avrebbe reso l'API più completa, ma avrebbe richiesto un trattamento dedicato con un costo, inteso in termini sia di rige di codice che di complessità del codice più che lineare. Ho quindi scelto di definire un modello che permettesse di rappresentare, per estensione esterna, la maggior parte delle operazioni. Ottenendo un core più piccolo e semplice da verificare. Questa scelta apre inoltre alla possibilità di una libreria esterna dedicata, che raccolga componenti come collector (per esempio \texttt{toMap}) e filtri stateful (per esempio \texttt{distinct}), validati, senza appesantire la libreria principale.
 
+Queste scelte, insieme al bilanciamento tra espressività dell'API, complessità delle macro e prestazioni del codice generato, hanno comportato i seguenti limiti.
 \begin{itemize}
-  \item \textbf{Costo di compilazione macro e dimensione del bytecode}: l'elaborazione dell'AST a compile-time e l'inlining aggressivo delle lambda tramite beta-reduction spostano l'onere computazionale sul compilatore Scala 3. Misurazioni sperimentali condotte tramite staging su JVM mostrano che la compilazione di una pipeline tipica sequenziale (\texttt{filter} + \texttt{map} + \texttt{summing}) richiede circa $128\,\text{ms}$, emettendo un loop bytecode estremamente compatto di appena $40$--$55\,\text{byte}$. Al contrario, pipeline con \texttt{flatMap} annidati richiedono circa $375\,\text{ms}$ di tempo di compilazione ($2.9\times$ superiore) per via della scomposizione ricorsiva dell'AST e dell'elaborazione di due livelli di continuazioni, generando un bytecode di circa $110$--$130\,\text{byte}$. Sebbene il tempo di compilazione sia superiore a quello richiesto da librerie a runtime, esso viene ammortizzato istantaneamente all'avvio dell'applicazione.
-  \item \textbf{Allocazione eager dell'upper bound in \texttt{toArray}}: quando una sorgente filtrata o generata da \texttt{flatMap} (la cui cardinalità esatta è incognita ma limitata superiormente da una dimensione massima nota) viene raccolta tramite \texttt{toArray}, la macro alloca preventivamente un array pari alla dimensione massima dell'intervallo. Questo compromesso privilegia la totale assenza di riallocazioni e ridimensionamenti dinamici all'interno del ciclo di attraversamento, a fronte di un potenziale consumo temporaneo di memoria qualora il predicato di filtro scarti un'elevata percentuale di elementi prima della compattazione finale.
-  \item \textbf{Rigidità sintattica della pipeline (divieto di assegnazione a \texttt{val})}: poiché la macro necessita dell'intero albero sintattico per effettuare la fusione, una pipeline \texttt{FusedStream} non può essere assegnata a una variabile intermedia (\texttt{val}) né spezzata o composta dinamicamente attraverso funzioni separate. La catena da \texttt{FusedStream.from(...)} a \texttt{.collect(...)} deve costituire un'unica espressione continua al call-site. Per casi d'uso dinamici, la libreria fornisce il modulo disgiunto \texttt{stream-fusion-runtime}.
-  \item \textbf{Operazioni non implementate rispetto a Java Stream}: l'API fused privilegia operazioni che possono essere trasformate direttamente in un unico ciclo di scansione lineare senza accumulo in memoria. Di conseguenza, operazioni che richiedono ordinamento, deduplicazione o memorizzazione intermedia globale (quali \texttt{sorted}, \texttt{distinct}, \texttt{count}, \texttt{reduce}, \texttt{min}/\texttt{max}, \texttt{anyMatch}, \texttt{allMatch}, \texttt{takeWhile}, \texttt{dropWhile}, \texttt{peek}, \texttt{zip}) non sono attualmente supportate nella macro, così come la raccolta parallela nativa in collezioni dinamiche \texttt{toList}/\texttt{toSet} (che richiede un collector custom).
-  \item \textbf{Non-associatività delle somme in virgola mobile parallele}: nella riduzione parallela di stream di \texttt{Double} o \texttt{Float} tramite \texttt{parallel().collect(summing)}, la partizione in chunk e l'ordine di riduzione dei contributi parziali dipendono dal numero di worker e da \texttt{chunksPerWorker}. A causa della non-associatività intrinseca dello standard IEEE 754, il valore numerico della somma può differire negli ultimi bit significativi rispetto alla valutazione strettamente sequenziale.
-  \item \textbf{Contatori di slice e indici in \texttt{Int}}: a differenza delle Stream Java (in cui \texttt{skip} e \texttt{limit} operano su \texttt{long}), l'API e i contatori interni di \texttt{FusedStream} adottano esclusivamente il tipo primitivo \texttt{Int}. Questa scelta architetturale mantiene il bytecode compatto e massimizza l'efficienza sui registri della CPU nei contesti reali in-memory, validando a runtime la non negatività dei parametri (\texttt{IllegalArgumentException}). Di converso, su sorgenti lazy potenzialmente infinite che richiedano uno skip superiore a $2^{31}-1$ elementi, il contatore interno incorrerebbe in overflow aritmetico.
+  \item \textbf{Costo della specializzazione}: lo spostamento dell'analisi della pipeline e l'inlining a compile time riduce il lavoro a runtime, ma aumenta il costo di compilazione e la quantità di codice generato, soprattutto con pipeline annidate.
+  \item \textbf{Composizione statica}: per rendere analizzabile l'intera pipeline, è necessario che la catena sia espressa al call site in un'unica espressione. Questa scelta limita la possibilità di operazioni come stream intermedi a variabili o di comporli dinamicamente.
 \end{itemize}
+
+\section{Uso degli LLM}
+\label{sec:uso-llm}
+
+Ho utilizzato gli LLM come supporto per alcune attività circoscritte. In particolare nella stesura della relazione mi sono serviti soprattutto per gli aspetti tipografici e di impaginazione, come la creazione di diagrammi e la rappresentazione delle formule. Li ho inoltre utilizzati per effettuare ricerche di informazioni e come aiuto per velocizzare la scrittura del codice di benchmarking e di test.
+
+In questi ultimi casi, il contributo ha seguito un approccio dichiarativo limitandomi a usare gli llm com un mero generatore di codice dopo aver definito cosa volessi testare o misurare e i risultati attesi e stato generato. Non ho utilizzato coding agent per lo sviluppo della libreria.
 
 \section{Sviluppi futuri}
 \label{sec:sviluppi-futuri}
 
-Le evidenze raccolte durante la validazione sperimentale aprono interessanti direzioni di miglioramento:
+Un primo è l'estensione dell'API con operatori ad oggi non supportati, come \texttt{sorted} e la concatenazione di stream. Entrambi escono dal modello di esecuzione attuale basato su un singolo attraversamento.
 
-\begin{itemize}
-  \item \textbf{Ottimizzazione dello scheduler parallelo}: come illustrato nella Sezione~\ref{subsec:bench-paralleli}, Java Parallel Stream sfrutta \texttt{CountedCompleter} e ottiene maggiore efficienza sulle taglie intermedie. L'attuale architettura di \texttt{FusedStream} si appoggia a un \texttt{ExecutionContext} standard sincronizzato via \texttt{CountDownLatch}. Un'indagine su uno scheduler dedicato basato direttamente su primitive \texttt{ForkJoinPool} costituisce una priorità per abbattere l'overhead di sottomissione; tale approfondimento non è stato possibile per motivi di tempo.
-  \item \textbf{Vettorizzazione SIMD}: con le nuove API del JDK (Project Panama e la \emph{Vector API}), il generatore potrebbe emettere istruzioni vettoriali esplicite per le trasformazioni e le riduzioni aritmetiche su tipi primitivi, superando i limiti dell'auto-vettorizzazione di HotSpot C2.
-  \item \textbf{Estensione dei collector paralleli}: introduzione di collector paralleli complessi con partizionamento hash (quali \texttt{groupBy} o aggregazioni associative multi-chiave), progettati per limitare le contese senza creare collezioni intermedie temporanee.
-\end{itemize}
+Una seconda direzione riguarda la generazione del codice. Vorrei introdurre meccanismi di miglioramente delle perfomance in casi particolari come loop unrolling e vettorizzazione tramite istruzioni SIMD (Vector API).
 
-\section{Conclusioni}
-\label{sec:conclusioni}
+Andrebbe migliorata inoltre la gestione dell'esecuzione parallela, in particolare per ottimizzare il modello di esecuzione in funzioen della dimensione della collezione sorgente.
 
-Il lavoro svolto ha dimostrato la fattibilità e l'efficacia di un'architettura di \emph{stream fusion} a tempo di compilazione in Scala 3. Sfruttando le macro tipizzate, la reflection a compile-time e l'inlining delle lambda, \texttt{FusedStream} riesce a colmare il divario storico tra la chiarezza dichiarativa della programmazione funzionale e la velocità dei loop imperativi scritti a mano su JVM.
-
-La valutazione empirica ha confermato che, mentre le soluzioni esistenti degradano sensibilmente in scenari applicativi reali per via del fallimento dell'inline caching sui call site megamorfici, la fusione a compile-time mantiene prestazioni invarianti e competitive con il codice Java manuale a zero allocazioni.
-
+Infine, vorrei provare a riscrivere la libreria usando il modello di code reflection introdotto da Project Babylon in Java. Questo permetterebbe di ottenere una rappresentazione del codice delle lambda direttamente dal linguaggio, senza dipendere da macro e di applicare il concetto di stream fusion ma lavorando a runtime.
 \bibliographystyle{plain}
 \bibliography{references}
 \end{document}

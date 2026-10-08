@@ -1,14 +1,14 @@
 \babel@toc {italian}{}\relax 
 \babel@toc {italian}{}\relax 
 \contentsline {chapter}{\numberline {1}Introduzione}{3}{chapter.1}%
-\contentsline {section}{\numberline {1.1}Obiettivi e criteri di valutazione}{4}{section.1.1}%
+\contentsline {section}{\numberline {1.1}Obiettivi}{4}{section.1.1}%
 \contentsline {chapter}{\numberline {2}Analisi dei requisiti}{5}{chapter.2}%
 \contentsline {section}{\numberline {2.1}Requisiti di business}{5}{section.2.1}%
 \contentsline {section}{\numberline {2.2}Requisiti funzionali utente}{5}{section.2.2}%
 \contentsline {section}{\numberline {2.3}Requisiti funzionali di sistema}{6}{section.2.3}%
 \contentsline {section}{\numberline {2.4}Requisiti negativi ed esclusioni (Out of Scope)}{6}{section.2.4}%
 \contentsline {section}{\numberline {2.5}Requisiti non funzionali}{7}{section.2.5}%
-\contentsline {chapter}{\numberline {3}Background e tecnologie abilitanti}{8}{chapter.3}%
+\contentsline {chapter}{\numberline {3}Background e tecnologie utilizzate}{8}{chapter.3}%
 \contentsline {section}{\numberline {3.1}Stream fusion}{8}{section.3.1}%
 \contentsline {subsection}{\numberline {3.1.1}Push stream}{8}{subsection.3.1.1}%
 \contentsline {subsection}{\numberline {3.1.2}Pull stream}{9}{subsection.3.1.2}%
@@ -79,14 +79,19 @@
 \contentsline {section}{\numberline {7.2}Valutazione delle prestazioni}{40}{section.7.2}%
 \contentsline {subsection}{\numberline {7.2.1}Metodologia}{40}{subsection.7.2.1}%
 \contentsline {subsection}{\numberline {7.2.2}Benchmark sequenziali}{40}{subsection.7.2.2}%
-\contentsline {subsubsection}{Scenario Monomorfico}{40}{section*.13}%
-\contentsline {subsubsection}{Scenario Megamorfico (Carico applicativo reale)}{41}{section*.14}%
-\contentsline {paragraph}{Analisi dei risultati.}{41}{section*.15}%
-\contentsline {subsection}{\numberline {7.2.3}Benchmark paralleli}{42}{subsection.7.2.3}%
-\contentsline {paragraph}{Speedup, efficienza e analisi di scalabilità a 4 core.}{42}{section*.16}%
-\contentsline {subsection}{\numberline {7.2.4}Comportamento a freddo e livelli di compilazione JIT}{43}{subsection.7.2.4}%
-\contentsline {subsection}{\numberline {7.2.5}Allocazioni e comportamento del Garbage Collector}{44}{subsection.7.2.5}%
-\contentsline {chapter}{\numberline {8}Retrospettiva}{46}{chapter.8}%
-\contentsline {section}{\numberline {8.1}Limiti e compromessi progettuali}{46}{section.8.1}%
-\contentsline {section}{\numberline {8.2}Sviluppi futuri}{47}{section.8.2}%
-\contentsline {section}{\numberline {8.3}Conclusioni}{47}{section.8.3}%
+\contentsline {subsubsection}{Scenario monomorfico}{40}{section*.13}%
+\contentsline {subsubsection}{Scenario megamorfico}{41}{section*.14}%
+\contentsline {subsection}{\numberline {7.2.3}Benchmark paralleli}{41}{subsection.7.2.3}%
+\contentsline {subsection}{\numberline {7.2.4}Livelli di compilazione JIT}{41}{subsection.7.2.4}%
+\contentsline {subsection}{\numberline {7.2.5}Allocazioni}{42}{subsection.7.2.5}%
+\contentsline {chapter}{\numberline {8}Processo di sviluppo}{43}{chapter.8}%
+\contentsline {section}{\numberline {8.1}Modello di sviluppo}{43}{section.8.1}%
+\contentsline {section}{\numberline {8.2}Fasi di sviluppo}{43}{section.8.2}%
+\contentsline {section}{\numberline {8.3}Gestione del repository}{44}{section.8.3}%
+\contentsline {section}{\numberline {8.4}Automazione}{44}{section.8.4}%
+\contentsline {chapter}{\numberline {9}Conclusioni}{45}{chapter.9}%
+\contentsline {section}{\numberline {9.1}Retrospettiva}{45}{section.9.1}%
+\contentsline {subsection}{\numberline {9.1.1}Difficoltà incontrate}{45}{subsection.9.1.1}%
+\contentsline {section}{\numberline {9.2}Limiti e compromessi progettuali}{45}{section.9.2}%
+\contentsline {section}{\numberline {9.3}Uso degli LLM}{46}{section.9.3}%
+\contentsline {section}{\numberline {9.4}Sviluppi futuri}{46}{section.9.4}%
