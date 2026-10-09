@@ -163,9 +163,9 @@ given RuntimeConfig = RuntimeConfig(
 - `findFirst`: Return the first element, if present.
 
 ### Custom Collectors
+
 Implement `Collector` for custom aggregations:, for parallel pipelines, implement `ParallelCollector` (requiring thread-safe or partitionable buffers and an associative `combine` method).
 Examples can be found in the reference usage repository [Fused Stream — Reference Usage](https://github.com/leorm2002/sf-integration)
----
 
 ## Reference Usage
 
