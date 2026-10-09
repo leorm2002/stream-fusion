@@ -105,7 +105,7 @@ val letters: List[Char] = FusedStream
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `useUnsafe` | `Boolean` | `false` | Enables `VarHandle` direct access to `java.util.ArrayList` internal array, eliminating bounds checks. Requires JVM flag `--add-opens java.base/java.util=ALL-UNNAMED`. |
+| `useUnsafe` | `Boolean` | `true` | Enables `VarHandle` direct access to `java.util.ArrayList` internal array, eliminating bounds checks. Requires JVM flag `--add-opens java.base/java.util=ALL-UNNAMED`. |
 | `enableLogging` | `Boolean` | `false` | Prints compiler debug logs and the generated imperative Scala AST during compilation. |
 | `strictInlining` | `Boolean` | `true` | Requires custom collectors to be concrete classes with `inline` methods to prevent runtime overhead. |
 
@@ -163,52 +163,16 @@ given RuntimeConfig = RuntimeConfig(
 - `findFirst`: Return the first element, if present.
 
 ### Custom Collectors
-Implement `Collector` for custom aggregations:
-
-```scala
-import fuse.FusedStream.*
-
-final class MinMaxBuffer(var min: Int,var max: Int,var initialized: Boolean)
-
-final class MinMaxCollector extends Collector[Int, MinMaxBuffer, Option[(Int, Int)], Exhaustive] {
-
-  inline def supplier(): MinMaxBuffer = new MinMaxBuffer(0, 0, false)
-
-  inline def accumulator(buf: MinMaxBuffer, elem: Int): Boolean = {
-    if (!buf.initialized) {
-      buf.min = elem
-      buf.max = elem
-      buf.initialized = true
-    } else {
-      if (elem < buf.min) buf.min = elem
-      if (elem > buf.max) buf.max = elem
-    }
-
-    false // No short circuiting
-  }
-
-  inline def finisher(buf: MinMaxBuffer): Option[(Int, Int)] =
-    if (buf.initialized) Some((buf.min, buf.max)) else None
-}
-```
-
-For parallel pipelines, implement `ParallelCollector` (requiring thread-safe or partitionable buffers and an associative `combine` method).
-
+Implement `Collector` for custom aggregations:, for parallel pipelines, implement `ParallelCollector` (requiring thread-safe or partitionable buffers and an associative `combine` method).
+Examples can be found in the reference usage repository [Fused Stream — Reference Usage](https://github.com/leorm2002/sf-integration)
 ---
 
+## Reference Usage
 
-## Known Limitations and Design Trade-offs
+A minimal integration project demonstrating built-in and custom collectors, including `ToMapCollector` and `MinMaxCollector`, with sequential and parallel execution examples.
 
-1. **Syntactic continuity:** `FusedStream` macro pipelines cannot be stored in a `val` or broken across methods. The entire chain from `.from(...)` to `.collect(...)` must be contiguous.
-2. **`flatMap` inline requirement:** The body of `.flatMap` must be an inline lambda returning an inline `FusedStream` (e.g. `x => FusedStream.from(...)`).
+See [Fused Stream — Reference Usage](https://github.com/leorm2002/sf-integration) for practical examples of library usage and extensibility.
 
----
-
-## License
-
-This project is licensed under the [Apache License, Version 2.0](LICENSE).
-
----
 
 ## Benchmarks (HotSpot C2)
 
@@ -267,3 +231,10 @@ Each chart groups implementations by input size. The vertical axis shows average
 | 100,000 | 66.263 ± 0.770 | 48.199 ± 0.318 | 148.636 ± 3.138 |
 
 </details>
+
+
+## License
+
+This project is licensed under the [Apache License, Version 2.0](LICENSE).
+
+---
