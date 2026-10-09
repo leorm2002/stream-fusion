@@ -65,7 +65,7 @@
 \contentsline {subsection}{\numberline {6.4.1}Traduzione dell'OP IR}{30}{subsection.6.4.1}%
 \contentsline {subsection}{\numberline {6.4.2}Applicazione e inlining delle funzioni}{31}{subsection.6.4.2}%
 \contentsline {subsection}{\numberline {6.4.3}Chiamate e inlining dei collector}{31}{subsection.6.4.3}%
-\contentsline {subsection}{\numberline {6.4.4}Lowering del parallelismo}{31}{subsection.6.4.4}%
+\contentsline {subsection}{\numberline {6.4.4}Lowering di pipelines parallele}{31}{subsection.6.4.4}%
 \contentsline {section}{\numberline {6.5}Esempio di traduzione end-to-end}{32}{section.6.5}%
 \contentsline {subsection}{\numberline {6.5.1}L'input alla libreria}{32}{subsection.6.5.1}%
 \contentsline {subsection}{\numberline {6.5.2}Il risultato del parsing}{34}{subsection.6.5.2}%
