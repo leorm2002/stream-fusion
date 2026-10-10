@@ -2,7 +2,7 @@ package fuse.internal
 import scala.quoted.*
 import CollectionStrategy.*
 import fuse.internal.ir.{AnyIR, Phase}
-import fuse.internal.{CollectionStrategy, EnrichedCollectionStrategy}
+import fuse.internal.{CollectionStrategy}
 
 private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
   private given macroQuotes: ir.quotes.type = ir.quotes
@@ -12,10 +12,10 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
   import ir.StreamTree.*
   import logger.*
 
-  def optimize[OUT, Buf, R](ast: ir.Ast[OUT, R]): AstExt[OUT, R] = {
+  def optimize[OUT, Buf, R](ast: ir.Ast[Phase.Raw, OUT, R]): Ast[Phase.Enriched, OUT, R] = {
 
     // Stream enrichment
-    val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
+    val (earlyRef, exitDeclarations) = enrich(ast.fields.collectionStrategy.strategy)
     val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](ast.parsedStream, earlyRef.toList)
 
     debug(s"[Enriched] => $enrichedStream")
@@ -26,15 +26,20 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
     val streamInfo = analyze(enrichedStream)
     debug(s"[streamInfo] => $streamInfo")
 
-    AstExt(
-      enrichedStream,
-      ast.prefixStatements,
-      declarations ::: exitDeclarations,
-      EnrichedCollectionStrategy(ast.collectionStrategy, earlyRef, earlyExitRefs),
-      streamInfo.hasAlignedIndexes,
-      streamInfo.cardinality,
-      ast.executionMode
-    )
+    var enrichedStrategy = PhasedCollectionStrategy[Phase.Enriched, OUT, R](ast.fields.collectionStrategy.strategy, EnrichedStrategyFields(earlyRef, earlyExitRefs))
+    val enriched: Ast[Phase.Enriched, OUT, R] =
+      Ast[Phase.Enriched, OUT, R](
+        enrichedStream,
+        prefixStatements = ast.prefixStatements,
+        executionMode = ast.executionMode,
+        fields = EnrichedAstFields(
+          collectionStrategy = enrichedStrategy,
+          declarations = declarations ::: exitDeclarations,
+          hasAlignedIndexes = streamInfo.hasAlignedIndexes,
+          cardinality = streamInfo.cardinality
+        )
+      )
+    enriched
   }
 
   private def enrich[OUT, R](strategy: CollectionStrategy[OUT, R]): (Option[Expr[Boolean]], List[Declaration]) = {
@@ -72,7 +77,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
     debug(s"[Enriching Node] => $parsedStream")
 
     parsedStream match {
-      case slice: Slice[OUT] => {
+      case slice: Slice[Phase.Raw, OUT] => {
         // Evaluate slice bounds exactly once and validate non-negative bounds
         val (fromRef, fromDeclarations) = slice.from match {
           case Some(from) => {
@@ -117,7 +122,8 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
         val (enrichedUpstream, upstreamDeclarations, outPred) = enrich(slice.upstream, currentExitPredicates)
 
-        val enrichedSlice = EnrichedSlice[OUT](upstream = enrichedUpstream, from = fromRef, until = untilRef, outType = slice.outType, counterRefSymbol = typedCounterSymbol)
+        val enrichedSlice =
+          Slice[Phase.Enriched, OUT](upstream = enrichedUpstream, from = fromRef, until = untilRef, outType = slice.outType, EnrichedSliceFields(typedCounterSymbol))
 
         (enrichedSlice, upstreamDeclarations ::: fromDeclarations ::: untilDeclarations ::: List(counterDef), outPred)
       }
@@ -142,24 +148,22 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
         (enrichedFilter, declarations ::: predicateDeclarations, predicates)
       }
 
-      case fm: FlatMap[in, OUT] => {
+      case fm: FlatMap[Phase.Raw, in, OUT] => {
 
         // Enriche the inner stream, already extracted during the optimization phase, gathers exitPredicates + local predicates to the inner
         val (innerEnrichedTree, innerDecls, innerAccumulatedPredicates) = enrich[OUT](fm.innerStream, exitPredicates)
         // Recurisvy Enrich the upstream upstream using the predicates from the level of the flatmap
         val (enrichedUpstream, upstreamDeclarations, fullExitPredicates) = enrich[in](fm.upstream, exitPredicates)
 
-        val enrichedFlatMap =
-          EnrichedFlatMap[in, OUT](
-            upstream = enrichedUpstream,
-            innerStream = innerEnrichedTree,
-            inType = fm.inType,
-            outType = fm.outType,
-            binder = fm.binder,
-            innerDeclarations = fm.innerDeclarations,
-            innerMaterialized = innerDecls,
-            predicates = innerAccumulatedPredicates
-          )
+        val enrichedFlatMap = FlatMap[Phase.Enriched, in, OUT](
+          upstream = enrichedUpstream,
+          innerStream = innerEnrichedTree,
+          inType = fm.inType,
+          outType = fm.outType,
+          binder = fm.binder,
+          innerDeclarations = fm.innerDeclarations,
+          EnrichedFlatMapFields(innerDecls, innerAccumulatedPredicates)
+        )
 
         (enrichedFlatMap, upstreamDeclarations, fullExitPredicates)
       }
@@ -169,7 +173,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
       case JIterableSource(term, outType) => (JIterableSource[Phase.Enriched, OUT](term, outType), Nil, exitPredicates)
 
-      case source: ArraySource[OUT] =>
+      case source: ArraySource[Phase.Raw, OUT] =>
         given Type[OUT] = source.outType
         val typedSourceSymbol = createConstant[Array[OUT]]("source")
         val sourceRef = typedSourceSymbol.ref
@@ -177,9 +181,9 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
         val typedSizeSymbol = createConstant[Int]("sourceSize")
         val sizeRef = typedSizeSymbol.ref
         val sizeDef = Declaration.Impl(typedSizeSymbol, '{ $sourceRef.length })
-        (EnrichedArraySource[OUT](sourceRef, sizeRef, source.outType), List[Declaration](sourceDef, sizeDef), exitPredicates)
+        (ArraySource[Phase.Enriched, OUT](sourceRef, source.outType, EnrichedArraySourceFields(sizeRef)), List[Declaration](sourceDef, sizeDef), exitPredicates)
 
-      case source: JListSource[OUT] =>
+      case source: JListSource[Phase.Raw, OUT] =>
         given Type[OUT] = source.outType
         val typedSourceSymbol = createConstant[java.util.List[OUT]]("source")
         val sourceRef = typedSourceSymbol.ref
@@ -187,7 +191,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
         val typedSizeSymbol = createConstant[Int]("sourceSize")
         val sizeRef = typedSizeSymbol.ref
         val sizeDef = Declaration.Impl(typedSizeSymbol, '{ $sourceRef.size() })
-        (EnrichedJListSource[OUT](sourceRef, sizeRef, source.outType), List[Declaration](sourceDef, sizeDef), exitPredicates)
+        (JListSource[Phase.Enriched, OUT](sourceRef, source.outType, EnrichedJListFields(sizeRef)), List[Declaration](sourceDef, sizeDef), exitPredicates)
 
     }
 
@@ -224,8 +228,8 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
   private def analyze(tree: StreamTree[Phase.Enriched, ?]): StreamProperties = {
     tree match {
-      case EnrichedJListSource(term, sizeRef, outType) => StreamProperties(Cardinality.Exact(sizeRef), true)
-      case EnrichedArraySource(term, sizeRef, outType) => StreamProperties(Cardinality.Exact(sizeRef), true)
+      case JListSource(_, _, EnrichedJListFields(sizeRef))       => StreamProperties(Cardinality.Exact(sizeRef), true)
+      case ArraySource(_, _, EnrichedArraySourceFields(sizeRef)) => StreamProperties(Cardinality.Exact(sizeRef), true)
 
       case _: IterableSource[Phase.Enriched, ?]  => StreamProperties(Cardinality.Unknown, false)
       case _: JIterableSource[Phase.Enriched, ?] => StreamProperties(Cardinality.Unknown, false)
@@ -236,12 +240,12 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
         upstream.copy(hasAlignedIndexes = false, cardinality = upstream.cardinality.asUpperBound)
       }
       // potenzialmente possiamo accumulare le ref alle variabili e definire la size in maniera esatta
-      case slice: EnrichedSlice[?] => {
+      case slice: Slice[Phase.Enriched, ?] => {
         val upstream = analyze(slice.upstream)
         upstream.copy(hasAlignedIndexes = slice.from.isEmpty && upstream.hasAlignedIndexes, cardinality = upstream.cardinality.asUpperBound)
       }
 
-      case _: EnrichedFlatMap[?, ?] => StreamProperties(Cardinality.Unknown, false)
+      case _: FlatMap[Phase.Enriched, ?, ?] => StreamProperties(Cardinality.Unknown, false)
     }
   }
 }

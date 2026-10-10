@@ -5,6 +5,7 @@ import scala.quoted.Expr
 import fuse.Summable
 import fuse.CollectorBase
 import scala.quoted.Type
+import fuse.internal.ir.Phase
 
 private sealed trait CollectionStrategy[A, R]
 
@@ -22,11 +23,17 @@ private object CollectionStrategy {
   ) extends CollectionStrategy[A, R]
 }
 
-/** Represents a collector enriched with:
-  * @param earlyExitVar
-  *   the (optional) that signals when the collector has enough elements (es. findFirst collector)
-  * @param ref
-  *   eventual other vairable wich may be added to signal to exti (es. a limit clause)
-  */
-// We do not use Phase-indexed fields here, this is an extension shared across all cases
-private case class EnrichedCollectionStrategy[A, R](collectionStrategy: CollectionStrategy[A, R], earlyExitVar: Option[Expr[Boolean]], ref: List[Expr[Boolean]])
+private final case class PhasedCollectionStrategy[P <: Phase, A, R](
+    strategy: CollectionStrategy[A, R],
+    fields: StrategyFields[P]
+)
+
+private final case class EnrichedStrategyFields(
+    earlyExitVar: Option[Expr[Boolean]],
+    ref: List[Expr[Boolean]]
+)
+
+private type StrategyFields[P <: Phase] = P match {
+  case Phase.Raw      => Unit
+  case Phase.Enriched => EnrichedStrategyFields
+}

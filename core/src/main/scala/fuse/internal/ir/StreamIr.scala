@@ -4,7 +4,8 @@ import scala.quoted.Quotes
 import scala.quoted.Expr
 import scala.quoted.Type
 import scala.collection.mutable.ArrayBuilder
-import fuse.internal.{CollectionStrategy, EnrichedCollectionStrategy}
+import fuse.internal.{CollectionStrategy}
+import fuse.internal.PhasedCollectionStrategy
 // Alias the StreamIr to a type combined with singleton. this will guarantee no problem with path deendant type
 type AnyIR = StreamIr & Singleton
 
@@ -12,8 +13,8 @@ type AnyIR = StreamIr & Singleton
   */
 private[internal] sealed trait Phase
 private[internal] object Phase {
-  sealed trait Raw extends Phase
-  sealed trait Enriched extends Phase
+  final class Raw extends Phase
+  final class Enriched extends Phase
 }
 
 /** Represents the mode of execution of a stream: sequential or parallel
@@ -66,24 +67,27 @@ private[internal] class StreamIr(using val quotes: Quotes) {
     }
   }
 
-  /** The base AST, abtained by the parsing phase */
-  case class Ast[A, R](
-      parsedStream: StreamTree[Phase.Raw, A],
-      collectionStrategy: CollectionStrategy[A, R],
+  /** Phase indexed AST, abtained by the parsing phase */
+  case class Ast[P <: Phase, A, R](
+      parsedStream: StreamTree[P, A],
       prefixStatements: List[Statement],
-      executionMode: ExecutionMode
+      executionMode: ExecutionMode,
+      fields: AstFields[P, A, R]
   )
 
-  /** Represents parsed optimized and enriched stream
-    */
-  case class AstExt[A, R](
-      enrichedStream: StreamTree[Phase.Enriched, A],
-      prefixStatements: List[Statement],
-      declarations: List[Declaration],
-      collectionStrategy: EnrichedCollectionStrategy[A, R],
+  type AstFields[P <: Phase, A, R] = P match {
+    case Phase.Raw      => RawAstFields[A, R]
+    case Phase.Enriched => EnrichedAstFields[A, R]
+  }
+  final case class RawAstFields[A, R](
+      collectionStrategy: PhasedCollectionStrategy[Phase.Raw, A, R]
+  )
+
+  final case class EnrichedAstFields[A, R](
+      collectionStrategy: PhasedCollectionStrategy[Phase.Enriched, A, R],
       hasAlignedIndexes: Boolean,
       cardinality: Cardinality,
-      executionMode: ExecutionMode
+      declarations: List[Declaration]
   )
 
   /** When present indicates that the node has a predecessor, only the root nodes are not WithUpstream */
@@ -96,14 +100,10 @@ private[internal] class StreamIr(using val quotes: Quotes) {
     def outType: Type[A]
 
     /** Represent a (java) List structure used as the source of element for the stream computation */
-    case JListSource[A](term: Expr[java.util.List[A]], outType: Type[A]) extends StreamTree[Phase.Raw, A]
-
-    case EnrichedJListSource[A](term: Expr[java.util.List[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[Phase.Enriched, A]
+    case JListSource[P <: Phase, A](term: Expr[java.util.List[A]], outType: Type[A], fields: JListFields[P]) extends StreamTree[P, A]
 
     /** Represent an array structure used as the source of element for the stream computation */
-    case ArraySource[A](term: Expr[Array[A]], outType: Type[A]) extends StreamTree[Phase.Raw, A]
-
-    case EnrichedArraySource[A](term: Expr[Array[A]], sizeRef: Expr[Int], outType: Type[A]) extends StreamTree[Phase.Enriched, A]
+    case ArraySource[P <: Phase, A](term: Expr[Array[A]], outType: Type[A], fields: ArraySourceFields[P]) extends StreamTree[P, A]
 
     /** Represent an iterable data structure used as the source of element for the stream computation */
     case IterableSource[P <: Phase, A](term: Expr[Iterable[A]], outType: Type[A]) extends StreamTree[P, A]
@@ -118,17 +118,9 @@ private[internal] class StreamIr(using val quotes: Quotes) {
     case Map[P <: Phase, A, B](upstream: StreamTree[P, A], function: Expr[A => B], inType: Type[A], outType: Type[B]) extends StreamTree[P, B] with WithUpstream[P, A]
 
     /** Represent a slice operation namely an operation X -> X typewise and  one to one or zero regarding cardinality */
-    case Slice[A](upstream: StreamTree[Phase.Raw, A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A])
-        extends StreamTree[Phase.Raw, A]
-        with WithUpstream[Phase.Raw, A]
-
-    case EnrichedSlice[A](
-        upstream: StreamTree[Phase.Enriched, A],
-        from: Option[Expr[Int]],
-        until: Option[Expr[Int]],
-        outType: Type[A],
-        val counterRefSymbol: TypedSymbol[Int]
-    ) extends StreamTree[Phase.Enriched, A] with WithUpstream[Phase.Enriched, A]
+    case Slice[P <: Phase, A](upstream: StreamTree[P, A], from: Option[Expr[Int]], until: Option[Expr[Int]], outType: Type[A], fields: SliceFields[P])
+        extends StreamTree[P, A]
+        with WithUpstream[P, A]
 
     /** A flat map operation
       *
@@ -146,29 +138,50 @@ private[internal] class StreamIr(using val quotes: Quotes) {
       * @param innerDeclarations
       *   the inner stream mey need to declare variables for operations like limit/skip, this will be injected in the flatmap loop condition
       */
-    case FlatMap[A, B](
-        upstream: StreamTree[Phase.Raw, A],
-        innerStream: StreamTree[Phase.Raw, B],
-        inType: Type[A],
-        outType: Type[B],
-        binder: TypedSymbol[A],
-        innerDeclarations: List[Statement]
-    ) extends StreamTree[Phase.Raw, B] with WithUpstream[Phase.Raw, A]
-
-    /** Represents a flatMap enriched with the list of predicates injected from the outer stream and extracted from the inner one
-      */
-    case EnrichedFlatMap[A, B](
-        upstream: StreamTree[Phase.Enriched, A],
-        innerStream: StreamTree[Phase.Enriched, B], // AST dell'inner stream già arricchito
+    case FlatMap[P <: Phase, A, B](
+        upstream: StreamTree[P, A],
+        innerStream: StreamTree[P, B],
         inType: Type[A],
         outType: Type[B],
         binder: TypedSymbol[A],
         innerDeclarations: List[Statement],
-        innerMaterialized: List[Declaration],
-        val predicates: List[Expr[Boolean]]
-    ) extends StreamTree[Phase.Enriched, B] with WithUpstream[Phase.Enriched, A]
+        fields: FlatMapFields[P]
+    ) extends StreamTree[P, B] with WithUpstream[P, A]
 
   }
+
+  type JListFields[P <: Phase] = P match {
+    case Phase.Raw      => Unit
+    case Phase.Enriched => EnrichedJListFields
+  }
+  final case class EnrichedJListFields(
+      sizeRef: Expr[Int]
+  )
+
+  type ArraySourceFields[P <: Phase] = P match {
+    case Phase.Raw      => Unit
+    case Phase.Enriched => EnrichedArraySourceFields
+  }
+  final case class EnrichedArraySourceFields(
+      sizeRef: Expr[Int]
+  )
+
+  type SliceFields[P <: Phase] = P match {
+    case Phase.Raw      => Unit
+    case Phase.Enriched => EnrichedSliceFields
+  }
+  final case class EnrichedSliceFields(
+      counterRefSymbol: TypedSymbol[Int]
+  )
+
+  type FlatMapFields[P <: Phase] = P match {
+    case Phase.Raw      => Unit
+    case Phase.Enriched => EnrichedFlatMapFields
+  }
+  final case class EnrichedFlatMapFields(
+      innerMaterialized: List[Declaration],
+      predicates: List[Expr[Boolean]]
+  )
 
   /** These are used in all the phases of the compiler, here to simplify invocation */
 

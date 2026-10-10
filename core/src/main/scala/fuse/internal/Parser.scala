@@ -24,7 +24,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
       stream: Expr[Stream[A]],
       collector: Expr[Collector[A, Buf, R, S]],
       executionMode: ExecutionMode
-  ): Ast[A, R] = {
+  ): Ast[Phase.Raw, A, R] = {
     debug("Starting  to parse the stream body")
     debug("=== parseTerm ===")
     debug(stream.asTerm.show)
@@ -42,7 +42,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     debug("Terminal parsing done")
     debug("Parsing the done")
 
-    Ast(verifiedTree, parsedCollector, parsedTree.declarations, executionMode)
+    Ast(verifiedTree, parsedTree.declarations, executionMode, RawAstFields(PhasedCollectionStrategy(parsedCollector, ())))
   }
 
   private def parseTerm(expr: ir.quotes.reflect.Term): ParsedTree = {
@@ -100,7 +100,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
       case jlist if jlist.derivesFrom(javaList) =>
         jlist.baseType(javaList) match {
           case AppliedType(_, List(elemTpe)) =>
-            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](JListSource[elem](term.asExprOf[java.util.List[elem]], Type.of[elem]), Nil) }
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](JListSource[Phase.Raw, elem](term.asExprOf[java.util.List[elem]], Type.of[elem], ()), Nil) }
         }
 
       case jiter if jiter.derivesFrom(javaIterableSymbol) =>
@@ -111,7 +111,8 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
 
       case arr if arr.derivesFrom(arraySymbol) =>
         arr.baseType(arraySymbol) match {
-          case AppliedType(_, List(elemTpe)) => getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](ArraySource[elem](term.asExprOf[Array[elem]], Type.of[elem]), Nil) }
+          case AppliedType(_, List(elemTpe)) =>
+            getType(elemTpe) match { case '[elem] => ParsedTreeImpl[elem](ArraySource[Phase.Raw, elem](term.asExprOf[Array[elem]], Type.of[elem], ()), Nil) }
         }
 
       case iter if iter.derivesFrom(iterableSymbol) =>
@@ -151,7 +152,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     type InOut = upstream.Out
 
     val skipNum = skipTerm.asExprOf[Int]
-    val skip = Slice[InOut](upstream.current, Option(skipNum), Option.empty, upstream.outType)
+    val skip = Slice[Phase.Raw, InOut](upstream.current, Option(skipNum), Option.empty, upstream.outType, ())
     ParsedTreeImpl[InOut](skip, upstream.declarations)
   }
 
@@ -160,7 +161,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     type InOut = upstream.Out
 
     val limitNum = limitTerm.asExprOf[Int]
-    val limit = Slice[InOut](upstream.current, Option.empty, Option(limitNum), upstream.outType)
+    val limit = Slice[Phase.Raw, InOut](upstream.current, Option.empty, Option(limitNum), upstream.outType, ())
 
     ParsedTreeImpl[InOut](limit, upstream.declarations)
   }
@@ -188,13 +189,14 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
         val parsedInner = parseTerm(innerStreamExpr.asTerm)
         val verifiedInnter = parsedInner.verifiedAs[out](innerStreamExpr.asTerm.pos)
 
-        val flatMap = FlatMap[In, out](
+        val flatMap = FlatMap[Phase.Raw, In, out](
           upstream = upstream.current, // keep the reference to the previous node
           innerStream = verifiedInnter, // The inner tree is the result of the parsing of the function
           inType = upstream.outType, // The input of the flatmap is the output of the previous node
           outType = Type.of[out], // The outptu is out, the type of the domain of the function
           binder = flatMapBinder, // keep the reference to the binder, will be linked later to the previous step
-          innerDeclarations = parsedInner.declarations // the declarations extracted during the parsing of the inner stream
+          innerDeclarations = parsedInner.declarations, // the declarations extracted during the parsing of the inner stream
+          ()
         )
 
         ParsedTreeImpl[out](current = flatMap, declarations = upstream.declarations)

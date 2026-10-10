@@ -22,14 +22,14 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   import opIr.Op.*
   import logger.*
 
-  def generate[ELEM, OUT](optimizedStream: AstExt[ELEM, OUT])(using elemType: Type[ELEM], outType: Type[OUT]): Program[OUT] = {
-    val decls = optimizedStream.declarations
+  def generate[ELEM, OUT](optimizedStream: Ast[Phase.Enriched, ELEM, OUT])(using elemType: Type[ELEM], outType: Type[OUT]): Program[OUT] = {
+    val decls = optimizedStream.fields.declarations
     debug(s"Numero di dichiarazioni: ${decls.size}")
-    debug(s"Has an early exit ${optimizedStream.collectionStrategy.ref.nonEmpty}")
+    debug(s"Has an early exit ${optimizedStream.fields.collectionStrategy.fields.ref.nonEmpty}")
     val executionMode = optimizedStream.executionMode
-    optimizedStream.collectionStrategy.collectionStrategy match {
-      case ToArray()                         => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[AstExt[ELEM, Array[ELEM]]]).asInstanceOf[Program[OUT]]
-      case _: Summing[t]                     => generateSummingAccumulator[t](optimizedStream.asInstanceOf[AstExt[t, t]])(using elemType.asInstanceOf[Type[t]])
+    optimizedStream.fields.collectionStrategy.strategy match {
+      case ToArray()                         => generateToArrayAccumulator[ELEM](optimizedStream.asInstanceOf[Ast[Phase.Enriched, ELEM, Array[ELEM]]]).asInstanceOf[Program[OUT]]
+      case _: Summing[t]                     => generateSummingAccumulator[t](optimizedStream.asInstanceOf[Ast[Phase.Enriched, t, t]])(using elemType.asInstanceOf[Type[t]])
       case coll: WithCollector[ELEM, b, OUT] =>
         given Type[b] = coll.bufType
         executionMode match {
@@ -39,17 +39,17 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     }
   }
 
-  def generateToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, Array[OUT]]): Program[Array[OUT]] = {
+  def generateToArrayAccumulator[OUT: Type](optimizedStream: Ast[Phase.Enriched, OUT, Array[OUT]]): Program[Array[OUT]] = {
     optimizedStream.executionMode match {
       case ExecutionMode.Sequential => generateSequentialToArrayAccumulator(optimizedStream)
       case ExecutionMode.Parallel   => generateParallelToArrayAccumulator(optimizedStream)
     }
   }
 
-  def generateParallelToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, Array[OUT]]): Program[Array[OUT]] = {
-    optimizedStream.cardinality match {
+  def generateParallelToArrayAccumulator[OUT: Type](optimizedStream: Ast[Phase.Enriched, OUT, Array[OUT]]): Program[Array[OUT]] = {
+    optimizedStream.fields.cardinality match {
       // Direct write nell'array finale
-      case Cardinality.Exact(sizeExpr) if optimizedStream.hasAlignedIndexes => {
+      case Cardinality.Exact(sizeExpr) if optimizedStream.fields.hasAlignedIndexes => {
         // The array, it's only one shared across the threads
         val resultVec = createConstant[Array[OUT]]("outVec")
         val resultDeclare = Declare(resultVec, ArrayDefine[OUT](ScalaExpr(sizeExpr)))
@@ -60,9 +60,9 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val fromSymbol = createConstant[Int]("from")
         val untilSymbol = createConstant[Int]("until")
         val range = Some(SourceRange(SymbolRef[Int](fromSymbol), SymbolRef[Int](untilSymbol)))
-        val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
+        val body = buildBody(optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, range)
         val declarations = getAllDeclarations(optimizedStream)
-        val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
+        val sourceSize = getParallelSourceSize(optimizedStream.parsedStream).get
 
         val parallel = Parallel[Array[OUT]](
           returnSymbol = resultVec,
@@ -98,9 +98,9 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val arrayDeclare = Declare(localVec, ArrayDefine[OUT](localSize)) // Declare the array
 
         val range = Some(SourceRange(SymbolRef[Int](fromSymbol), SymbolRef[Int](untilSymbol)))
-        val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
+        val body = buildBody(optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, range)
         val declarations = getAllDeclarations(optimizedStream)
-        val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
+        val sourceSize = getParallelSourceSize(optimizedStream.parsedStream).get
 
         val parallel = Parallel[Array[OUT]](
           returnSymbol = resultSymbol,
@@ -124,9 +124,9 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val untilSymbol = createConstant[Int]("until")
         val arrayDeclare = Declare(localBuilder, DynamicArrayBuilderNew[OUT]())
         val range = Some(SourceRange(SymbolRef[Int](fromSymbol), SymbolRef[Int](untilSymbol)))
-        val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
+        val body = buildBody(optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, range)
         val declarations = getAllDeclarations(optimizedStream)
-        val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
+        val sourceSize = getParallelSourceSize(optimizedStream.parsedStream).get
         val parallel = Parallel[Array[OUT]](
           returnSymbol = resultSymbol,
           collectionSize = ScalaExpr(sourceSize),
@@ -142,14 +142,14 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
       case Cardinality.Exact(_) => report.errorAndAbort("Internal error: parallel stream with exact cardinality must have aligned indexes")
     }
   }
-  def generateSequentialToArrayAccumulator[OUT: Type](optimizedStream: AstExt[OUT, Array[OUT]]): Program[Array[OUT]] = {
-    val generated: Program[Array[OUT]] = optimizedStream.cardinality match {
+  def generateSequentialToArrayAccumulator[OUT: Type](optimizedStream: Ast[Phase.Enriched, OUT, Array[OUT]]): Program[Array[OUT]] = {
+    val generated: Program[Array[OUT]] = optimizedStream.fields.cardinality match {
       // Pipeline 1:1 dimensione esatta, se non abbiamo outputCardinalityUpperBound c'è un errore nel codices
-      case Cardinality.Exact(sizeExpr) if optimizedStream.hasAlignedIndexes => {
+      case Cardinality.Exact(sizeExpr) if optimizedStream.fields.hasAlignedIndexes => {
         val array = createConstant[Array[OUT]]("vec")
         // Codice per emissione: assegna all'indice corrente il valore
         val emit: Emit[OUT] = emitted => ArrayWrite(SymbolRef(array), emitted.sourceIndex.get, emitted.elem)
-        val body = buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, None)
+        val body = buildBody[OUT](optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, None)
         Program(
           List(
             Declare(array, ArrayDefine[OUT](ScalaExpr(sizeExpr))), // Declare the array
@@ -169,7 +169,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
               Inc(i)
             )
           ) // increment the counter
-        val body = buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, None)
+        val body = buildBody[OUT](optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, None)
         Program(
           List(
             Declare(array, ArrayDefine[OUT](ScalaExpr(sizeExpr))), // Declare the array
@@ -190,7 +190,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
               Inc(i)
             )
           ) // increment the counter
-        val body = buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, None)
+        val body = buildBody[OUT](optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, None)
         val arrayRef = SymbolRef[Array[OUT]](array)
         val indexRef = SymbolRef[Int](i)
         val result = IfValue(
@@ -213,7 +213,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val builder = createConstant[DynamicArrayBuilder[OUT]]("builder")
         val builderRef = SymbolRef[DynamicArrayBuilder[OUT]](builder)
         val emit: Emit[OUT] = emitted => DynamicArrayBuilderAdd(builderRef, emitted.elem)
-        val body = buildBody[OUT](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, None)
+        val body = buildBody[OUT](optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, None)
 
         Program(
           List(
@@ -229,21 +229,21 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     generated.copy(statements = declarations ++ generated.statements)
 
   }
-  def generateSummingAccumulator[OUT <: Summable: Type](optimizedStream: AstExt[OUT, OUT]): Program[OUT] = {
+  def generateSummingAccumulator[OUT <: Summable: Type](optimizedStream: Ast[Phase.Enriched, OUT, OUT]): Program[OUT] = {
     Type.of[OUT] match {
-      case '[Int]    => buildSum[Int](optimizedStream.asInstanceOf[AstExt[Int, Int]], ConstantVal(0)).asInstanceOf[Program[OUT]]
-      case '[Double] => buildSum[Double](optimizedStream.asInstanceOf[AstExt[Double, Double]], ConstantVal(0d)).asInstanceOf[Program[OUT]]
-      case '[Float]  => buildSum[Float](optimizedStream.asInstanceOf[AstExt[Float, Float]], ConstantVal(0f)).asInstanceOf[Program[OUT]]
-      case '[Long]   => buildSum[Long](optimizedStream.asInstanceOf[AstExt[Long, Long]], ConstantVal(0L)).asInstanceOf[Program[OUT]]
+      case '[Int]    => buildSum[Int](optimizedStream.asInstanceOf[Ast[Phase.Enriched, Int, Int]], ConstantVal(0)).asInstanceOf[Program[OUT]]
+      case '[Double] => buildSum[Double](optimizedStream.asInstanceOf[Ast[Phase.Enriched, Double, Double]], ConstantVal(0d)).asInstanceOf[Program[OUT]]
+      case '[Float]  => buildSum[Float](optimizedStream.asInstanceOf[Ast[Phase.Enriched, Float, Float]], ConstantVal(0f)).asInstanceOf[Program[OUT]]
+      case '[Long]   => buildSum[Long](optimizedStream.asInstanceOf[Ast[Phase.Enriched, Long, Long]], ConstantVal(0L)).asInstanceOf[Program[OUT]]
     }
   }
 
-  private def buildSum[T <: Summable: Type](optimizedStream: AstExt[T, T], zero: Value[T]): Program[T] = {
+  private def buildSum[T <: Summable: Type](optimizedStream: Ast[Phase.Enriched, T, T], zero: Value[T]): Program[T] = {
     optimizedStream.executionMode match {
       case ExecutionMode.Sequential => {
         val sumSymbol = createVariable[T]("sum")
         val emit: Emit[T] = emitted => AssignVal(sumSymbol, Add(sumSymbol, emitted.elem))
-        val loopBody = buildBody[T](optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, None)
+        val loopBody = buildBody[T](optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, None)
         val declarations = getAllDeclarations(optimizedStream)
 
         Program(
@@ -263,9 +263,9 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
         val untilSymbol = createConstant[Int]("until")
         val emit: Emit[T] = emitted => AssignVal(localSumSymbol, Add(SymbolRef[T](localSumSymbol), emitted.elem))
         val range = Some(SourceRange(SymbolRef[Int](fromSymbol), SymbolRef[Int](untilSymbol)))
-        val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
+        val body = buildBody(optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, range)
         val declarations = getAllDeclarations(optimizedStream)
-        val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
+        val sourceSize = getParallelSourceSize(optimizedStream.parsedStream).get
         val parallel = Parallel[T](
           returnSymbol = resultSymbol,
           collectionSize = ScalaExpr(sourceSize),
@@ -279,7 +279,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     }
   }
 
-  def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: AstExt[A, R], collector: Expr[CollectorBase[A, Buf, R]]): Program[R] = {
+  def generateGenericAccumulator[A: Type, Buf: Type, R: Type](optimizedStream: Ast[Phase.Enriched, A, R], collector: Expr[CollectorBase[A, Buf, R]]): Program[R] = {
     val collectorSymbol = createConstant[CollectorBase[A, Buf, R]]("collector")
     val bufferSymbol = createConstant[Buf]("buffer")
     val collectorRef = SymbolRef[CollectorBase[A, Buf, R]](collectorSymbol)
@@ -287,13 +287,13 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
 
     val emit: Emit[A] = emitted => {
       val accumulate = CollectorAccumulate(collectorRef, bufferRef, emitted.elem)
-      optimizedStream.collectionStrategy.earlyExitVar match {
+      optimizedStream.fields.collectionStrategy.fields.earlyExitVar match {
         case Some(exitRef) => Op.If(accumulate, AssignVal(TypedSymbol.fromExpr(exitRef), ConstantVal(false)))
         case None          => Compute(accumulate)
       }
     }
 
-    val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, None)
+    val body = buildBody(optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, None)
     val declarations = getAllDeclarations(optimizedStream)
 
     Program(
@@ -307,7 +307,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
   }
 
   def generateParallelGenericAccumulator[A: Type, Buf: Type, R: Type](
-      optimizedStream: AstExt[A, R],
+      optimizedStream: Ast[Phase.Enriched, A, R],
       collector: Expr[CollectorBase[A, Buf, R]]
   ): Program[R] = {
     given Type[ParallelCollector[A, Buf, R]] = Type.of[ParallelCollector[A, Buf, R]]
@@ -321,9 +321,9 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     // Non posso avere early exit per proprietà dell'input
     val emit: Emit[A] = emitted => Compute(CollectorAccumulate(collectorRef, localBufferRef, emitted.elem))
     val range = Some(SourceRange(SymbolRef[Int](fromSymbol), SymbolRef[Int](untilSymbol)))
-    val body = buildBody(optimizedStream.enrichedStream, emit, optimizedStream.collectionStrategy.ref, range)
+    val body = buildBody(optimizedStream.parsedStream, emit, optimizedStream.fields.collectionStrategy.fields.ref, range)
     val declarations = getAllDeclarations(optimizedStream)
-    val sourceSize = getParallelSourceSize(optimizedStream.enrichedStream).get
+    val sourceSize = getParallelSourceSize(optimizedStream.parsedStream).get
     val statements = List(
       Declare(localBufferSymbol, CollectorSupplier(collectorRef)),
       body
@@ -347,23 +347,23 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
 
   private def buildBody[OUT](tree: StreamTree[Phase.Enriched, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
     tree match {
-      case source: EnrichedJListSource[OUT]             => buildJListSource(source, emit, exitPredicates, range)
-      case source: EnrichedArraySource[OUT]             => buildArraySource(source, emit, exitPredicates, range)
+      case source: JListSource[Phase.Enriched, OUT]     => buildJListSource(source, emit, exitPredicates, range)
+      case source: ArraySource[Phase.Enriched, OUT]     => buildArraySource(source, emit, exitPredicates, range)
       case source: JIterableSource[Phase.Enriched, OUT] => buildJIterableSource(source, emit, exitPredicates, range)
       case source: IterableSource[Phase.Enriched, OUT]  => buildIterableSource(source, emit, exitPredicates, range)
       case filter: Filter[Phase.Enriched, OUT]          => buildFilter(filter, emit, exitPredicates, range)
       case map: Map[Phase.Enriched, ?, OUT]             => buildMap(map, emit, exitPredicates, range)
-      case slice: EnrichedSlice[OUT]                    => buildSlice(slice, emit, exitPredicates, range)
-      case flatmap: EnrichedFlatMap[in, OUT]            => buildFlatMap(flatmap, emit, exitPredicates, range)
+      case slice: Slice[Phase.Enriched, OUT]            => buildSlice(slice, emit, exitPredicates, range)
+      case flatmap: FlatMap[Phase.Enriched, in, OUT]    => buildFlatMap(flatmap, emit, exitPredicates, range)
     }
   }
 
-  private def buildFlatMap[IN, OUT](flatMap: EnrichedFlatMap[IN, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
+  private def buildFlatMap[IN, OUT](flatMap: FlatMap[Phase.Enriched, IN, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
     given Type[IN] = flatMap.inType
     given Type[OUT] = flatMap.outType
 
     val upstreamEmit: Emit[IN] = emitted => {
-      val innerBody = buildBody(flatMap.innerStream, emit, flatMap.predicates, None)
+      val innerBody = buildBody(flatMap.innerStream, emit, flatMap.fields.predicates, None)
       // Bind the outer element before initializing the inner source. Inner counters and declarations
       // belong to this iteration, while the inherited predicates can stop all enclosing loops.
       CodeBlock(
@@ -371,7 +371,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
           Declare(flatMap.binder, emitted.elem)
         ) ++
           flatMap.innerDeclarations.map(ExternalStatement.apply) ++
-          flatMap.innerMaterialized.map(materializedToOp) ++
+          flatMap.fields.innerMaterialized.map(materializedToOp) ++
           List(innerBody)
       )
     }
@@ -379,8 +379,8 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     buildBody(flatMap.upstream, upstreamEmit, exitPredicates, range)
   }
 
-  private def buildSlice[OUT](slice: EnrichedSlice[OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
-    val counterRefSymbol = slice.counterRefSymbol
+  private def buildSlice[OUT](slice: Slice[Phase.Enriched, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
+    val counterRefSymbol = slice.fields.counterRefSymbol
     val counterRef = counterRefSymbol.ref
     val upstreamEmit: Emit[OUT] = emitted => {
       val output = slice.from match {
@@ -393,13 +393,13 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     buildBody(slice.upstream, upstreamEmit, exitPredicates, range)
   }
 
-  private def buildArraySource[OUT](source: EnrichedArraySource[OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
+  private def buildArraySource[OUT](source: ArraySource[Phase.Enriched, OUT], emit: Emit[OUT], earlyExitRef: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
     given Type[OUT] = source.outType
 
     val indexSymbol = createVariable[Int]("i")
 
     val start = range.map(_.from).getOrElse(ConstantVal(0))
-    val end = range.map(_.until).getOrElse(ScalaExpr(source.sizeRef))
+    val end = range.map(_.until).getOrElse(ScalaExpr(source.fields.sizeRef))
 
     buildSourceLoop(
       LessThan(SymbolRef[Int](indexSymbol), end),
@@ -448,7 +448,7 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     )
   }
 
-  private def buildJListSource[OUT](source: EnrichedJListSource[OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
+  private def buildJListSource[OUT](source: JListSource[Phase.Enriched, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
     given Type[OUT] = source.outType
     val list = source.term
 
@@ -459,13 +459,13 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     )
   }
 
-  private def buildArrayListSource[OUT](source: EnrichedJListSource[OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
+  private def buildArrayListSource[OUT](source: JListSource[Phase.Enriched, OUT], emit: Emit[OUT], exitPredicates: List[Expr[Boolean]], range: Option[SourceRange]): Op = {
     given Type[OUT] = source.outType
     val list = ScalaExpr(source.term)
     val indexSymbol = createVariable[Int]("i")
     val indexRef = SymbolRef[Int](indexSymbol)
     val start = range.map(_.from).getOrElse(ConstantVal(0))
-    val end = range.map(_.until).getOrElse(ScalaExpr(source.sizeRef))
+    val end = range.map(_.until).getOrElse(ScalaExpr(source.fields.sizeRef))
     val condition = LessThan(indexRef, end)
 
     if (compileCfg.useUnsafe) {
@@ -531,9 +531,9 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
     buildBody[IN](map.upstream, upstreamEmit, earlyExitRef, range)
   }
 
-  def getAllDeclarations[ELEM, Buf, OUT](optimizedStream: AstExt[ELEM, OUT]): List[Op] = {
+  def getAllDeclarations[ELEM, Buf, OUT](optimizedStream: Ast[Phase.Enriched, ELEM, OUT]): List[Op] = {
     val prefixStatements = optimizedStream.prefixStatements.map(ExternalStatement.apply)
-    val declarations = optimizedStream.declarations.map(materializedToOp)
+    val declarations = optimizedStream.fields.declarations.map(materializedToOp)
     prefixStatements ++ declarations
 
   }
@@ -557,14 +557,14 @@ private final class OPGenerator[OPIR <: AnyOPIR](val opIr: OPIR, val compileCfg:
 
   private def getParallelSourceSize(tree: StreamTree[Phase.Enriched, ?]): Option[Expr[Int]] = {
     tree match {
-      case EnrichedJListSource(term, sizeRef, outType)                                                                       => Some(sizeRef)
-      case EnrichedArraySource(term, sizeRef, outType)                                                                       => Some(sizeRef)
-      case IterableSource(term, outType)                                                                                     => None
-      case JIterableSource(term, outType)                                                                                    => None
-      case Filter(upstream, predicate, outType)                                                                              => getParallelSourceSize(upstream)
-      case Map(upstream, function, inType, outType)                                                                          => getParallelSourceSize(upstream)
-      case EnrichedSlice(upstream, from, until, outType, counterRef)                                                         => None
-      case EnrichedFlatMap(upstream, innerStream, inType, outType, binder, innerDeclarations, innerMaterialized, predicates) => getParallelSourceSize(upstream)
+      case JListSource(_, _, EnrichedJListFields(sizeRef))       => Some(sizeRef)
+      case ArraySource(_, _, EnrichedArraySourceFields(sizeRef)) => Some(sizeRef)
+      case IterableSource(_, _)                                  => None
+      case JIterableSource(_, _)                                 => None
+      case Filter(upstream, _, _)                                => getParallelSourceSize(upstream)
+      case Map(upstream, _, _, _)                                => getParallelSourceSize(upstream)
+      case Slice(_, _, _, _, _)                                  => None
+      case FlatMap(upstream, _, _, _, _, _, _)                   => getParallelSourceSize(upstream)
     }
   }
 }
