@@ -5,7 +5,6 @@ import scala.quoted.Expr
 import scala.quoted.Type
 import scala.collection.mutable.ArrayBuilder
 import fuse.internal.{CollectionStrategy}
-import fuse.internal.PhasedCollectionStrategy
 // Alias the StreamIr to a type combined with singleton. this will guarantee no problem with path deendant type
 type AnyIR = StreamIr & Singleton
 
@@ -70,24 +69,23 @@ private[internal] class StreamIr(using val quotes: Quotes) {
   /** Phase indexed AST, abtained by the parsing phase */
   case class Ast[P <: Phase, A, R](
       parsedStream: StreamTree[P, A],
+      collectionStrategy: CollectionStrategy[A, R],
       prefixStatements: List[Statement],
       executionMode: ExecutionMode,
-      fields: AstFields[P, A, R]
+      fields: AstFields[P]
   )
 
-  type AstFields[P <: Phase, A, R] = P match {
-    case Phase.Raw      => RawAstFields[A, R]
-    case Phase.Enriched => EnrichedAstFields[A, R]
+  type AstFields[P <: Phase] = P match {
+    case Phase.Raw      => Unit
+    case Phase.Enriched => EnrichedAstFields
   }
-  final case class RawAstFields[A, R](
-      collectionStrategy: PhasedCollectionStrategy[Phase.Raw, A, R]
-  )
 
-  final case class EnrichedAstFields[A, R](
-      collectionStrategy: PhasedCollectionStrategy[Phase.Enriched, A, R],
+  final case class EnrichedAstFields(
+      declarations: List[Declaration],
       hasAlignedIndexes: Boolean,
       cardinality: Cardinality,
-      declarations: List[Declaration]
+      earlyExitVar: Option[Expr[Boolean]],
+      ref: List[Expr[Boolean]]
   )
 
   /** When present indicates that the node has a predecessor, only the root nodes are not WithUpstream */

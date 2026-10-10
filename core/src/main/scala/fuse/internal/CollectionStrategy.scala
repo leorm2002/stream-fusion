@@ -5,7 +5,6 @@ import scala.quoted.Expr
 import fuse.Summable
 import fuse.CollectorBase
 import scala.quoted.Type
-import fuse.internal.ir.Phase
 
 private sealed trait CollectionStrategy[A, R]
 
@@ -21,19 +20,4 @@ private object CollectionStrategy {
   final case class WithCollector[A, Buf, R](collector: Expr[CollectorBase[A, Buf, R]], isEarlyStopping: Boolean)(using
       val bufType: Type[Buf] // We must mantain the evidence to use it when we generate the code
   ) extends CollectionStrategy[A, R]
-}
-
-private final case class PhasedCollectionStrategy[P <: Phase, A, R](
-    strategy: CollectionStrategy[A, R],
-    fields: StrategyFields[P]
-)
-
-private final case class EnrichedStrategyFields(
-    earlyExitVar: Option[Expr[Boolean]],
-    ref: List[Expr[Boolean]]
-)
-
-private type StrategyFields[P <: Phase] = P match {
-  case Phase.Raw      => Unit
-  case Phase.Enriched => EnrichedStrategyFields
 }

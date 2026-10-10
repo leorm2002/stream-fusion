@@ -15,7 +15,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
   def optimize[OUT, Buf, R](ast: ir.Ast[Phase.Raw, OUT, R]): Ast[Phase.Enriched, OUT, R] = {
 
     // Stream enrichment
-    val (earlyRef, exitDeclarations) = enrich(ast.fields.collectionStrategy.strategy)
+    val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
     val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](ast.parsedStream, earlyRef.toList)
 
     debug(s"[Enriched] => $enrichedStream")
@@ -26,20 +26,19 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
     val streamInfo = analyze(enrichedStream)
     debug(s"[streamInfo] => $streamInfo")
 
-    var enrichedStrategy = PhasedCollectionStrategy[Phase.Enriched, OUT, R](ast.fields.collectionStrategy.strategy, EnrichedStrategyFields(earlyRef, earlyExitRefs))
-    val enriched: Ast[Phase.Enriched, OUT, R] =
-      Ast[Phase.Enriched, OUT, R](
-        enrichedStream,
-        prefixStatements = ast.prefixStatements,
-        executionMode = ast.executionMode,
-        fields = EnrichedAstFields(
-          collectionStrategy = enrichedStrategy,
-          declarations = declarations ::: exitDeclarations,
-          hasAlignedIndexes = streamInfo.hasAlignedIndexes,
-          cardinality = streamInfo.cardinality
-        )
+    Ast[Phase.Enriched, OUT, R](
+      parsedStream = enrichedStream,
+      collectionStrategy = ast.collectionStrategy,
+      prefixStatements = ast.prefixStatements,
+      executionMode = ast.executionMode,
+      fields = EnrichedAstFields(
+        declarations = declarations ::: exitDeclarations,
+        hasAlignedIndexes = streamInfo.hasAlignedIndexes,
+        cardinality = streamInfo.cardinality,
+        earlyExitVar = earlyRef,
+        ref = earlyExitRefs
       )
-    enriched
+    )
   }
 
   private def enrich[OUT, R](strategy: CollectionStrategy[OUT, R]): (Option[Expr[Boolean]], List[Declaration]) = {

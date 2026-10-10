@@ -42,7 +42,13 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     debug("Terminal parsing done")
     debug("Parsing the done")
 
-    Ast(verifiedTree, parsedTree.declarations, executionMode, RawAstFields(PhasedCollectionStrategy(parsedCollector, ())))
+    Ast[Phase.Raw, A, R](
+      parsedStream = verifiedTree,
+      collectionStrategy = parsedCollector,
+      prefixStatements = parsedTree.declarations,
+      executionMode = executionMode,
+      fields = ()
+    )
   }
 
   private def parseTerm(expr: ir.quotes.reflect.Term): ParsedTree = {
