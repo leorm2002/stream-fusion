@@ -14,7 +14,7 @@ import scala.annotation.static
 import java.util.concurrent.atomic.AtomicReference
 
 /** Emits Scala code from an operation program, independently of stream lowering. */
-private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, runCfg: Expr[RuntimeConfig], val logger: FusedLogger) {
+private[internal] final class Lowerer[OPIR <: AnyOPIR](val opIr: OPIR, runCfg: Expr[RuntimeConfig], val logger: FusedLogger) {
   private given macroQuotes: opIr.quotes.type = opIr.quotes
 
   import opIr.*
@@ -384,7 +384,7 @@ private[internal] final class OPCodeGenerator[OPIR <: AnyOPIR](val opIr: OPIR, r
   }
 }
 
-object OPCodeGenerator {
+object Lowerer {
   inline def computeCount(size: Int, config: RuntimeConfig): Int = {
     if (size == 0) 0
     else if (config.workerCount == 1) 1

@@ -32,7 +32,7 @@ class ParserTest extends FunSuite {
 
       val mockCollector = '{ new Collector.ToListCollector[String] }
       // 2. Chiamata al Parser
-      val astResult = parser.parseExpression[String, ListBuffer[String], List[String], Exhaustive](mockStreamExpr, mockCollector, ExecutionMode.Sequential)
+      val astResult = parser.parse[String, ListBuffer[String], List[String], Exhaustive](mockStreamExpr, mockCollector, ExecutionMode.Sequential)
       def getPrevious(arg0: parser.ir.StreamTree[?, ?]) = {
         arg0 match {
           case p: parser.ir.WithUpstream[?, ?] => p.upstream
@@ -42,10 +42,10 @@ class ParserTest extends FunSuite {
       assert(astResult != null)
 
       // Map
-      assertEquals(astResult.parsedStream.getClass().getName(), "fuse.internal.ir.StreamIr$StreamTree$Map")
+      assertEquals(astResult.stream.getClass().getName(), "fuse.internal.ir.StreamIr$StreamTree$Map")
 
       // Map
-      var prev = getPrevious(astResult.parsedStream)
+      var prev = getPrevious(astResult.stream)
       assertEquals(prev.getClass().getName(), "fuse.internal.ir.StreamIr$StreamTree$Map")
 
       // Filter

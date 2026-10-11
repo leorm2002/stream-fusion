@@ -2,10 +2,10 @@ package fuse.internal.parallel
 
 import fuse.internal.ir.AnyOPIR
 import scala.quoted.*
-import fuse.internal.OPCodeGenerator
+import fuse.internal.Lowerer
 import fuse.RuntimeConfig
 
-private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGenerator[OPIR]](val conf: Expr[RuntimeConfig], val opGenerator: G) {
+private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: Lowerer[OPIR]](val conf: Expr[RuntimeConfig], val opGenerator: G) {
 
   private[internal] val opIr: opGenerator.opIr.type = opGenerator.opIr
   private given macroQuotes: opIr.quotes.type = opIr.quotes
@@ -19,7 +19,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
 
     val resultExpr: Expr[Array[E]] = '{
       val size = $sourceSize
-      val chunks = OPCodeGenerator.computeCount(size, $conf)
+      val chunks = Lowerer.computeCount(size, $conf)
       val workers = math.min($conf.workerCount, chunks)
       val partials = ${ newArray[Array[E]]('{ chunks }) }
       val sizes: Array[Int] = ${ concat.validSize.fold('{ null.asInstanceOf[Array[Int]] })(_ => newArray[Int]('{ chunks })) }
@@ -122,7 +122,7 @@ private[fuse] final class ParallelArrayCodegen[OPIR <: AnyOPIR, G <: OPCodeGener
 
     val processExpr: Expr[Unit] = '{
       val size = $sourceSize
-      val chunks = OPCodeGenerator.computeCount(size, $conf)
+      val chunks = Lowerer.computeCount(size, $conf)
       val workers = math.min($conf.workerCount, chunks)
       ${
         processParallelChunks('{ chunks }, '{ workers }) { chunkIdx =>

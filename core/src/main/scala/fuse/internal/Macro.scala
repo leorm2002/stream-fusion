@@ -53,15 +53,15 @@ private[fuse] object Macro {
 
     val logger = new FusedLogger(compileCfg)
     // Execute the parsing of the whole expression
-    val parsed = Parser(ir, logger.of("Parser")).parseExpression(stream, terminal, executionMode)
+    val parsed = Parser(ir, logger.of("Parser")).parse(stream, terminal, executionMode)
 
     // Performa optimization, creates the variable and links the usage
     val optimized = Optimizer(ir, logger.of("Optimizer")).optimize(parsed)
 
     // Share the operation IR between lowering and code generation, preserving the Quotes instance.
     val opIr = OPIr(ir)
-    val program = OPGenerator(opIr, compileCfg, logger).generate(optimized)
-    val res = OPCodeGenerator(opIr, runCfg, logger).lower(program)
+    val program = Planner(opIr, compileCfg, logger).execute(optimized)
+    val res = Lowerer(opIr, runCfg, logger).lower(program)
     logger.debug(s"=== FUSED STREAM GENERATED ===")
     logger.debug(res.show)
     logger.debug(s"==============================")

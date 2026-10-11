@@ -68,7 +68,7 @@ private[internal] class StreamIr(using val quotes: Quotes) {
 
   /** Phase indexed AST, abtained by the parsing phase */
   case class Ast[P <: Phase, A, R](
-      parsedStream: StreamTree[P, A],
+      stream: StreamTree[P, A],
       collectionStrategy: CollectionStrategy[A, R],
       prefixStatements: List[Statement],
       executionMode: ExecutionMode,

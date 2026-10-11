@@ -20,7 +20,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
   import ir.StreamTree.*
   import logger.*
 
-  def parseExpression[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](
+  def parse[A: Type, Buf: Type, R: Type, S <: TerminationPolicy](
       stream: Expr[Stream[A]],
       collector: Expr[Collector[A, Buf, R, S]],
       executionMode: ExecutionMode
@@ -43,7 +43,7 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     debug("Parsing the done")
 
     Ast[Phase.Raw, A, R](
-      parsedStream = verifiedTree,
+      stream = verifiedTree,
       collectionStrategy = parsedCollector,
       prefixStatements = parsedTree.declarations,
       executionMode = executionMode,
@@ -347,10 +347,6 @@ private final class Parser[IR <: AnyIR](val ir: IR, val logger: FusedLogger) {
     }
   }
 
-  case class ParsedTreeGen[A](
-      current: StreamTree[Phase.Raw, A],
-      outType: Type[A]
-  )
   private sealed trait ParsedTree {
     type Out
 

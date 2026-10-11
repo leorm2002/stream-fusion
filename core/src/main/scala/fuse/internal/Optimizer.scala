@@ -16,7 +16,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
     // Stream enrichment
     val (earlyRef, exitDeclarations) = enrich(ast.collectionStrategy)
-    val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](ast.parsedStream, earlyRef.toList)
+    val (enrichedStream, declarations, earlyExitRefs) = enrich[OUT](ast.stream, earlyRef.toList)
 
     debug(s"[Enriched] => $enrichedStream")
     debug(s"[Declarations] => $declarations")
@@ -27,7 +27,7 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
     debug(s"[streamInfo] => $streamInfo")
 
     Ast[Phase.Enriched, OUT, R](
-      parsedStream = enrichedStream,
+      stream = enrichedStream,
       collectionStrategy = ast.collectionStrategy,
       prefixStatements = ast.prefixStatements,
       executionMode = ast.executionMode,
@@ -65,17 +65,17 @@ private final class Optimizer[IR <: AnyIR](val ir: IR, val logger: FusedLogger) 
 
   /** Navigate bottom up enriching the components
     *
-    * @param parsedStream
+    * @param stream
     */
   private def enrich[OUT](
-      parsedStream: StreamTree[Phase.Raw, OUT],
+      stream: StreamTree[Phase.Raw, OUT],
       exitPredicates: List[Expr[Boolean]]
   ): (StreamTree[Phase.Enriched, OUT], List[Declaration], List[Expr[Boolean]]) = {
 
     // Recursevly enrich upstream (bottom up)
-    debug(s"[Enriching Node] => $parsedStream")
+    debug(s"[Enriching Node] => $stream")
 
-    parsedStream match {
+    stream match {
       case slice: Slice[Phase.Raw, OUT] => {
         // Evaluate slice bounds exactly once and validate non-negative bounds
         val (fromRef, fromDeclarations) = slice.from match {
