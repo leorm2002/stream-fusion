@@ -46,13 +46,13 @@
                 <mxCell id="box_codice_gen" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="Codice&lt;br&gt;generato" vertex="1">
                     <mxGeometry height="60" width="140" x="60" y="260" as="geometry"/>
                 </mxCell>
-                <mxCell id="box_lowering" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="Lowering /&lt;br&gt;Code Generator" vertex="1">
+                <mxCell id="box_lowering" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="Lowerer" vertex="1">
                     <mxGeometry height="60" width="150" x="55" y="370" as="geometry"/>
                 </mxCell>
                 <mxCell id="box_op_ir" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="OP IR" vertex="1">
                     <mxGeometry height="60" width="140" x="260" y="370" as="geometry"/>
                 </mxCell>
-                <mxCell id="box_op_ir_gen" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="OP IR&lt;br&gt;Generator" vertex="1">
+                <mxCell id="box_op_ir_gen" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="Planner" vertex="1">
                     <mxGeometry height="60" width="140" x="455" y="370" as="geometry"/>
                 </mxCell>
                 <mxCell id="box_runtime" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=13;fontColor=#000000;" value="Runtime Support&lt;br&gt;Parallelismo e con-&lt;br&gt;figurazione runtime" vertex="1">
@@ -102,7 +102,7 @@
                         <mxPoint x="730" y="230" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="N9y0XbGedEZhIhqpEngg-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="Ast" vertex="1">
+                <mxCell id="N9y0XbGedEZhIhqpEngg-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="Ast(Raw)" vertex="1">
                     <mxGeometry height="60" width="140" x="660" y="150" as="geometry"/>
                 </mxCell>
                 <mxCell id="N9y0XbGedEZhIhqpEngg-9" edge="1" parent="1" source="box_enrichment" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;endArrow=classic;endFill=1;" target="N9y0XbGedEZhIhqpEngg-8" value="">
@@ -111,7 +111,7 @@
                         <mxPoint x="525" y="370" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="N9y0XbGedEZhIhqpEngg-8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="Extended Ast" vertex="1">
+                <mxCell id="N9y0XbGedEZhIhqpEngg-8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=20;strokeColor=#000000;strokeWidth=1.5;fillColor=#ffffff;fontSize=14;fontColor=#000000;" value="Ast(Enriched)" vertex="1">
                     <mxGeometry height="60" width="140" x="660" y="370" as="geometry"/>
                 </mxCell>
             </root>

@@ -23,7 +23,7 @@
                 <mxCell id="3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;" value="Parser" vertex="1">
                     <mxGeometry height="60" width="120" x="190" y="250" as="geometry"/>
                 </mxCell>
-                <mxCell id="4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;" value="Code Generator" vertex="1">
+                <mxCell id="4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;" value="Lowerer" vertex="1">
                     <mxGeometry height="60" width="120" x="190" y="640" as="geometry"/>
                 </mxCell>
                 <mxCell id="11" edge="1" parent="1" source="6" style="edgeStyle=none;html=1;" target="7">
@@ -45,7 +45,7 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;fontStyle=1;fontSize=14;" value="OP Translator" vertex="1">
+                <mxCell id="7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;fontStyle=1;fontSize=14;" value="Planner" vertex="1">
                     <mxGeometry height="60" width="120" x="190" y="520" as="geometry"/>
                 </mxCell>
                 <mxCell id="14" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontStyle=1;fontSize=14;" value="Backend" vertex="1">
